@@ -128,6 +128,8 @@ export interface CobroDelDia {
   /** Quién lo cobró, si ya se registró (≠ asignado ⇒ asistencia) */
   cobradoPorId: number | null;
   cobradoPorNombre: string | null;
+  /** Cuándo se cobró (YYYY-MM-DD), null si sigue sin cobrarse */
+  fechaDePago: string | null;
   cliente: ClienteListado;
 }
 

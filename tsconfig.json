@@ -9,6 +9,9 @@
     "esModuleInterop": true,
     "module": "esnext",
     "moduleResolution": "bundler",
+    // services/mapear.ts se importa tal cual desde `npm run check`, que corre
+    // sobre node sin bundler y por eso necesita la extensión explícita.
+    "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
     "jsx": "react-jsx",

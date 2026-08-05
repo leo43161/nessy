@@ -1,5 +1,14 @@
-import { api, USE_MOCK } from "@/services/api";
-import { cobrosDeLaVentana, delay, getDb, toCobroDelDia } from "@/services/mock/db";
+import { USE_MOCK } from "@/services/api";
+import {
+  VENTANA_FUTURO,
+  VENTANA_PASADO,
+  cobrosDeLaVentana,
+  delay,
+  getDb,
+  toCobroDelDia,
+} from "@/services/mock/db";
+import { getHistorico } from "@/services/cobros.service";
+import { getCobradores } from "@/services/cobradores.service";
 import { addDays, todayISO } from "@/lib/format";
 import { esCobrado, esVencido } from "@/lib/status";
 import type { CobroDelDia, EstadisticasCobrador, RankingCobrador } from "@/types";
@@ -88,8 +97,68 @@ export async function getEstadisticas(
     };
     return delay(stats, 200);
   }
-  const { data } = await api.get<EstadisticasCobrador>("/estadisticas", {
-    params: { cobradorId, fecha },
-  });
-  return data;
+  // `/estadisticas` NO existe: es la tarea B.3, todavía sin hacer del lado de
+  // la base. Mientras tanto se calcula acá desde `/cuotas`, que trae todo lo
+  // necesario: el asignado, quién cobró de verdad, el monto y la fecha de pago.
+  //
+  // ponytail: trae el histórico entero y agrega en el cliente, igual que
+  // lib/agregados.ts del panel admin. Con el volumen actual alcanza; cuando
+  // crezca hay que moverlo al SP de B.3 junto con la paginación.
+  const [cobros, cobradores] = await Promise.all([getHistorico(), getCobradores()]);
+
+  const hoy = todayISO();
+  const ranking = calcularRanking(cobrosDeLaVentanaDe(cobros, fecha), cobradores);
+  const mio = ranking.find((r) => r.cobradorId === cobradorId);
+  const mejor = ranking[0];
+
+  const cobrosMios = cobrosDeLaVentanaDe(cobros, fecha).filter(
+    (c) => c.cobradorAsignadoId === cobradorId,
+  );
+  const totalDia = cobrosMios.length;
+  const cobradosDia = cobrosMios.filter((c) => esCobrado(c.estado)).length;
+  const gestionadosDia = cobrosMios.filter((c) => c.estado !== "Pendiente").length;
+
+  // Asistencias: cuotas mías que terminó cobrando otro, en los últimos 6 meses.
+  const desde = addDays(-182, hoy);
+  const asistencias = cobros.filter(
+    (c) =>
+      c.cobradorAsignadoId === cobradorId &&
+      c.cobradoPorId != null &&
+      c.cobradoPorId !== cobradorId &&
+      (c.fechaDePago ?? "") >= desde,
+  ).length;
+
+  // Promedio diario: lo que cobré yo, dividido por los días en que cobré algo.
+  const porDia = new Map<string, number>();
+  for (const c of cobros) {
+    if (c.cobradoPorId !== cobradorId || !c.fechaDePago) continue;
+    porDia.set(c.fechaDePago, (porDia.get(c.fechaDePago) ?? 0) + c.montoEsperado);
+  }
+  const totalDinero = [...porDia.values()].reduce((s, v) => s + v, 0);
+
+  const dineroPerdido = cobrosMios
+    .filter((c) => esVencido(c.estado, c.fechaAcordada, hoy))
+    .reduce((s, c) => s + c.montoEsperado, 0);
+
+  return {
+    ranking,
+    miPuesto: mio?.puesto ?? ranking.length,
+    totalCobradores: ranking.length,
+    brechaConElMejor:
+      mejor && mio && mejor.efectividad > 0
+        ? ((mejor.efectividad - mio.efectividad) / mejor.efectividad) * 100
+        : 0,
+    efectividadPersonal: totalDia > 0 ? (cobradosDia / totalDia) * 100 : 0,
+    completitud: totalDia > 0 ? (gestionadosDia / totalDia) * 100 : 0,
+    asistencias6Meses: asistencias,
+    promedioDiario: porDia.size > 0 ? totalDinero / porDia.size : 0,
+    dineroPerdido,
+  };
+}
+
+/** Misma ventana que usa el worklist, pero sobre cuotas ya traídas. */
+function cobrosDeLaVentanaDe(cobros: CobroDelDia[], fecha: string): CobroDelDia[] {
+  const lo = addDays(-VENTANA_PASADO, fecha);
+  const hi = addDays(VENTANA_FUTURO, fecha);
+  return cobros.filter((c) => c.fechaAcordada >= lo && c.fechaAcordada <= hi);
 }

@@ -559,6 +559,7 @@ export function toCobroDelDia(db: MockDb, pp: PagoPorRealizar): CobroDelDia | nu
     cobradorAsignadoNombre: asignado?.nombreCompleto ?? "—",
     cobradoPorId: cobradoPor?.id ?? null,
     cobradoPorNombre: cobradoPor?.nombreCompleto ?? null,
+    fechaDePago: realizado?.fechaDePago ?? null,
     cliente: toClienteListado(db, clienteRow),
   };
 }
