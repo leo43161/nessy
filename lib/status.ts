@@ -38,68 +38,54 @@ export const PAGO_ESTADO: Record<PagoEstado, PagoEstadoMeta> = {
       "bg-green-100 text-green-800 border-green-400 dark:bg-green-950 dark:text-green-300 dark:border-green-700",
     bar: "bg-green-500",
   },
-  Adelanto: {
-    label: "⏫ Adelanto",
-    short: "⏫ Adelanto",
-    badge: "bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300",
-    border: "border-l-teal-500",
-    pill: "bg-teal-500 text-white",
-    selected:
-      "bg-teal-100 text-teal-800 border-teal-400 dark:bg-teal-950 dark:text-teal-300 dark:border-teal-700",
-    bar: "bg-teal-500",
-  },
-  Recargo: {
-    label: "💰 Recargo",
-    short: "💰 Recargo",
-    badge: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
-    border: "border-l-amber-500",
-    pill: "bg-amber-500 text-white",
-    selected:
-      "bg-amber-100 text-amber-800 border-amber-400 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-700",
-    bar: "bg-amber-500",
-  },
-  Incomunicado: {
-    label: "📵 Incomunicado",
-    short: "📵 Incom.",
-    badge: "bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-300",
-    border: "border-l-violet-500",
-    pill: "bg-violet-500 text-white",
-    selected:
-      "bg-violet-100 text-violet-800 border-violet-400 dark:bg-violet-950 dark:text-violet-300 dark:border-violet-700",
-    bar: "bg-violet-500",
-  },
 };
 
-export const PAGO_ESTADOS: PagoEstado[] = [
-  "Pendiente",
-  "Pagado",
-  "Adelanto",
-  "Recargo",
-  "Incomunicado",
-];
+export const PAGO_ESTADOS: PagoEstado[] = ["Pendiente", "Pagado"];
 
-/** Estados que puede registrar el cobrador con un click */
-export const ESTADOS_REGISTRABLES: Exclude<PagoEstado, "Pendiente">[] = [
-  "Pagado",
-  "Adelanto",
-  "Recargo",
-  "Incomunicado",
-];
+/**
+ * Cómo se llama el cobro según cuánto entró. No es un estado de la cuota: la
+ * cuota queda `Pagado` en los tres casos. Es la misma deducción que hace la
+ * API para elegir el stored procedure, replicada para poder nombrarlo en la
+ * UI antes de mandarlo.
+ */
+export type TipoDeCobro = "ideal" | "parcial" | "adelantado";
 
-/** Concepto por defecto del pago realizado según el estado registrado */
-export const CONCEPTO_POR_ESTADO: Record<Exclude<PagoEstado, "Pendiente">, string> = {
-  Pagado: "Cuota cobrada",
-  Adelanto: "Pago adelantado",
-  Recargo: "Pago con recargo",
-  Incomunicado: "Cliente incomunicado",
+export function tipoDeCobro(monto: number, esperado: number): TipoDeCobro {
+  // En centavos enteros, igual que la API: con una tolerancia sobre floats un
+  // centavo de diferencia cae del lado equivocado por el redondeo binario.
+  const m = Math.round(monto * 100);
+  const e = Math.round(esperado * 100);
+  if (m === e) return "ideal";
+  return m < e ? "parcial" : "adelantado";
+}
+
+export const TIPO_DE_COBRO_LABEL: Record<TipoDeCobro, string> = {
+  ideal: "Cobro completo",
+  parcial: "Cobro parcial",
+  adelantado: "Adelanta cuotas futuras",
+};
+
+/** Concepto por defecto del pago realizado según cuánto entró */
+export const CONCEPTO_POR_TIPO: Record<TipoDeCobro, string> = {
+  ideal: "Cuota cobrada",
+  parcial: "Pago parcial",
+  adelantado: "Pago adelantado",
 };
 
 /** Un pago con alguno de estos estados cuenta como cobrado */
-export const ESTADOS_COBRADOS: PagoEstado[] = ["Pagado", "Adelanto", "Recargo"];
+export const ESTADOS_COBRADOS: PagoEstado[] = ["Pagado"];
 
 export function esCobrado(estado: PagoEstado): boolean {
   return ESTADOS_COBRADOS.includes(estado);
 }
+
+/** Motivos frecuentes de advertencia, para no escribirlos a mano cada vez */
+export const MOTIVOS_ADVERTENCIA = [
+  "Cliente incomunicado",
+  "No estaba en el domicilio",
+  "Pidió pasar otro día",
+  "Se negó a pagar",
+];
 
 /** Vencido (derivado): sigue pendiente y la fecha acordada ya pasó */
 export function esVencido(estado: PagoEstado, fechaAcordada: string, hoy: string): boolean {

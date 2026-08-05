@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "check": "node services/mapear.check.ts"
+    "check": "node services/mapear.check.ts && node lib/status.check.ts"
   },
   "dependencies": {
     "@react-pdf/renderer": "^4.5.1",

@@ -1,6 +1,12 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
+import axios from "axios";
 import * as cobrosService from "@/services/cobros.service";
-import type { CobroDelDia, FiltroCobros, RegistrarPagoPayload } from "@/types";
+import type {
+  CobroDelDia,
+  FiltroCobros,
+  RegistrarAdvertenciaPayload,
+  RegistrarPagoPayload,
+} from "@/types";
 
 type LoadStatus = "idle" | "loading" | "succeeded" | "failed";
 
@@ -34,10 +40,33 @@ export const registrarPago = createAsyncThunk<
 >("cobros/registrar", async (payload, { rejectWithValue }) => {
   try {
     return await cobrosService.registrarPago(payload);
-  } catch {
-    return rejectWithValue("No se pudo registrar el pago.");
+  } catch (e) {
+    // La API devuelve 409 si la cuota ya está pagada y 404 si el método de
+    // pago no existe: el mensaje suyo dice más que uno genérico.
+    return rejectWithValue(mensajeDeError(e, "No se pudo registrar el pago."));
   }
 });
+
+export const registrarAdvertencia = createAsyncThunk<
+  void,
+  RegistrarAdvertenciaPayload,
+  { rejectValue: string }
+>("cobros/advertencia", async (payload, { rejectWithValue }) => {
+  try {
+    return await cobrosService.registrarAdvertencia(payload);
+  } catch (e) {
+    return rejectWithValue(mensajeDeError(e, "No se pudo registrar la advertencia."));
+  }
+});
+
+/** Saca el `message` que manda la API; si no hay, usa el genérico. */
+function mensajeDeError(e: unknown, porDefecto: string): string {
+  if (axios.isAxiosError(e)) {
+    const msg = (e.response?.data as { message?: string } | undefined)?.message;
+    if (msg) return msg;
+  }
+  return porDefecto;
+}
 
 const cobrosSlice = createSlice({
   name: "cobros",

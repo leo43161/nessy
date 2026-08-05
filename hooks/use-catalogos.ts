@@ -1,12 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getCobradores, getLocalidades } from "@/services/cobradores.service";
+import {
+  getCobradores,
+  getLocalidades,
+  getMetodosDePago,
+} from "@/services/cobradores.service";
 import type { Cobrador, Localidad } from "@/types";
 
-// Catálogos estables durante la sesión (cobradores y localidades)
+// Catálogos estables durante la sesión (cobradores, localidades, métodos de pago)
 let cobradoresCache: Cobrador[] | null = null;
 let localidadesCache: Localidad[] | null = null;
+let metodosCache: Localidad[] | null = null;
 
 export function useCobradores(): Cobrador[] {
   const [cobradores, setCobradores] = useState<Cobrador[]>(cobradoresCache ?? []);
@@ -42,4 +47,23 @@ export function useLocalidades(): Localidad[] {
   }, []);
 
   return localidades;
+}
+
+/** Métodos de pago — POST /cobros los pide como `id_metodo_de_pago` */
+export function useMetodosDePago(): Localidad[] {
+  const [metodos, setMetodos] = useState<Localidad[]>(metodosCache ?? []);
+
+  useEffect(() => {
+    if (metodosCache) return;
+    let activo = true;
+    getMetodosDePago().then((data) => {
+      metodosCache = data;
+      if (activo) setMetodos(data);
+    });
+    return () => {
+      activo = false;
+    };
+  }, []);
+
+  return metodos;
 }

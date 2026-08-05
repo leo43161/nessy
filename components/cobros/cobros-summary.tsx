@@ -1,22 +1,29 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { esCobrado } from "@/lib/status";
+import { esCobrado, esVencido } from "@/lib/status";
+import { fmtMoney, todayISO } from "@/lib/format";
 import type { CobroDelDia } from "@/types";
 
 /** Mini-tarjetas con el resumen del worklist */
 export function CobrosSummary({ cobros }: { cobros: CobroDelDia[] }) {
+  const hoy = todayISO();
+  // Recargos e incomunicados ya no son estados de cuota (N.4): el primero sale
+  // de una advertencia y el segundo es una advertencia. En su lugar se muestra
+  // lo que el cobrador sí necesita ver de un vistazo: qué vence y cuánta plata.
   const total = cobros.length;
   const cobrados = cobros.filter((c) => esCobrado(c.estado)).length;
   const pendientes = cobros.filter((c) => c.estado === "Pendiente").length;
-  const recargos = cobros.filter((c) => c.estado === "Recargo").length;
-  const incomunicados = cobros.filter((c) => c.estado === "Incomunicado").length;
+  const vencidos = cobros.filter((c) => esVencido(c.estado, c.fechaAcordada, hoy)).length;
+  const porCobrar = cobros
+    .filter((c) => !esCobrado(c.estado))
+    .reduce((s, c) => s + c.montoEsperado, 0);
 
   const stats = [
     { valor: `${cobrados}/${total}`, label: "Cobrados", highlight: true },
     { valor: pendientes, label: "Pendientes" },
-    { valor: recargos, label: "Recargos", color: "text-amber-500" },
-    { valor: incomunicados, label: "Incomunicados", color: "text-violet-500" },
+    { valor: vencidos, label: "Vencidos", color: "text-red-500" },
+    { valor: fmtMoney(porCobrar), label: "Por cobrar" },
   ];
 
   return (

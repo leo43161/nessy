@@ -8,7 +8,20 @@
 
 /** Estado de un pago por realizar (Pagos_por_realizar.Estado).
  *  "Vencido" no se guarda: se deriva (Pendiente con fecha pasada). */
-export type PagoEstado = "Pendiente" | "Pagado" | "Incomunicado" | "Adelanto" | "Recargo";
+/**
+ * Estado de un pago por realizar (`Pagos_por_realizar.Estado`).
+ *
+ * Decisión N.4: **manda la base**. La columna solo guarda `Pendiente`,
+ * `Pagado` y `Atrasado`, y `Atrasado` se traduce a `Pendiente` al mapear
+ * porque el front deriva "Vencido" de la fecha.
+ *
+ * Los tres estados que traía la maqueta ya no viven acá:
+ *   - `Incomunicado` es una **advertencia** (`POST /advertencias`), no un
+ *     estado de la cuota.
+ *   - `Adelanto` se deduce: se cobró más que lo esperado.
+ *   - `Recargo` sale de una advertencia con monto, no de la cuota.
+ */
+export type PagoEstado = "Pendiente" | "Pagado";
 
 /** Plan_de_pagos.Status */
 export type PlanStatus = "Activo" | "Completado" | "Incumplido" | "Refinanciado";
@@ -196,11 +209,20 @@ export interface EstadoDeCuentaPlan {
   movimientos: EstadoDeCuentaMovimiento[];
 }
 
+/**
+ * Un movimiento del estado de cuenta.
+ *
+ * `/estado_cuenta` mezcla dos cosas en la misma lista: las cuotas y las
+ * advertencias. Por eso el estado no es un `PagoEstado` — una advertencia no
+ * es una cuota, es un recargo que vive aparte y se suma al saldo (N.2).
+ */
+export type MovimientoEstado = PagoEstado | "Recargo";
+
 export interface EstadoDeCuentaMovimiento {
   fecha: string;
   concepto: string;
   monto: number;
-  estado: PagoEstado;
+  estado: MovimientoEstado;
 }
 
 // ── Estadísticas ──
@@ -235,12 +257,35 @@ export interface EstadisticasCobrador {
 
 // ── Payloads hacia la API ──
 
+/**
+ * Registrar un cobro (`POST /cobros`).
+ *
+ * No se elige el "tipo": lo deduce la API comparando `monto` con lo esperado
+ * (igual → ideal, menor → parcial, mayor → adelantado), así el front no puede
+ * elegir mal.
+ */
 export interface RegistrarPagoPayload {
   pagoId: number;
-  estado: Exclude<PagoEstado, "Pendiente">;
+  /** Lo que entró de verdad. Puede ser menor o mayor a lo esperado (N.6). */
+  monto: number;
+  /** Obligatorio para la API. Sale de /catalogos/metodos_pago. */
+  idMetodoDePago: number;
+  /** Solo para el cobro parcial: cuándo se pactó el resto. */
+  nuevaFecha?: string;
   concepto?: string;
   /** Cobrador que registra (para asistencias) */
   cobradorId: number;
+  /** Ubicación del cobro (N.5). null = el navegador no la dio. */
+  lat?: number | null;
+  lon?: number | null;
+}
+
+/** Registrar una advertencia (`POST /advertencias`) — ej. cliente incomunicado */
+export interface RegistrarAdvertenciaPayload {
+  /** La advertencia cuelga del plan, no de la cuota */
+  planId: number;
+  motivo: string;
+  recargo?: number;
 }
 
 export interface FiltroCobros {

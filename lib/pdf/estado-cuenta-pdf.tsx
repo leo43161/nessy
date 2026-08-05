@@ -149,7 +149,9 @@ function asientosDelPlan(plan: EstadoDeCuentaPlan): Asiento[] {
   const cronologico = [...plan.movimientos].reverse();
 
   cronologico.forEach((m, i) => {
-    const cobrado = esCobrado(m.estado);
+    // Un movimiento de Recargo es un débito (una advertencia con monto), no
+    // un crédito: nunca resta del saldo.
+    const cobrado = m.estado === "Pagado";
     if (cobrado) saldo -= m.monto;
     filas.push({
       fecha: fechaCorta(m.fecha),

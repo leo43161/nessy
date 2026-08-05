@@ -285,36 +285,34 @@ const PLANES: PlanDePagos[] = [
 
 // ── Generación de cuotas (coherentes con la fecha) ──
 
+// N.4: la base solo guarda Pendiente y Pagado. Lo que antes eran estados
+// (Adelanto, Recargo, Incomunicado) ahora se deduce del monto abonado o vive
+// como advertencia, así que el mock genera solo los dos reales — con vencidas
+// entre las pendientes, que es lo que hace interesante al worklist.
 const CONCEPTOS: Record<PagoEstado, string> = {
   Pagado: "Cuota cobrada",
-  Adelanto: "Pago adelantado",
-  Recargo: "Pago con recargo",
-  Incomunicado: "Cliente incomunicado",
   Pendiente: "Cuota pendiente",
 };
 
 // Offsets (días respecto a hoy) por estado, coherentes con su significado
 const OFFSETS: Record<PagoEstado, number[]> = {
-  Pagado: [0, -1, -2, -9], // vence hoy/hace poco, pagada a tiempo
-  Pendiente: [1, 2, 4, 5], // vence en el futuro, sin cobrar
-  Adelanto: [3, 6, 7], // vence en el futuro, pero pagada por adelantado
-  Recargo: [-3, -4, -6], // venció, cobrada tarde con recargo
-  Incomunicado: [-5, -7, -8], // venció, no se pudo contactar
+  Pagado: [0, -1, -2, -9, -3, -4, -6], // vencía hoy o hace poco, ya cobrada
+  Pendiente: [1, 2, 4, 5, -5, -7, -8], // los negativos son las vencidas
 };
 
-// Distribución por cobrador. Marcos (1) = 3 de cada estado.
+// Distribución por cobrador. Marcos (1) = parejo.
 // Luis (2) y Diego (3) varían levemente para un ranking con orden claro.
 const COUNTS: Record<number, Record<PagoEstado, number>> = {
-  1: { Pagado: 3, Pendiente: 3, Adelanto: 3, Recargo: 3, Incomunicado: 3 },
-  2: { Pagado: 4, Pendiente: 2, Adelanto: 3, Recargo: 3, Incomunicado: 3 },
-  3: { Pagado: 2, Pendiente: 4, Adelanto: 3, Recargo: 3, Incomunicado: 3 },
+  1: { Pagado: 6, Pendiente: 6 },
+  2: { Pagado: 7, Pendiente: 5 },
+  3: { Pagado: 5, Pendiente: 7 },
 };
 
-const GEN_ORDER: PagoEstado[] = ["Pagado", "Pendiente", "Adelanto", "Recargo", "Incomunicado"];
+const GEN_ORDER: PagoEstado[] = ["Pagado", "Pendiente"];
 
 // Asistencias: cuotas cobradas por otro cobrador (quedan "fuera de rango")
 const ASISTENCIAS: Array<{ cobrador: number; estado: PagoEstado; k: number; cubre: number }> = [
-  { cobrador: 1, estado: "Recargo", k: 0, cubre: 3 }, // Diego cubrió a Marcos
+  { cobrador: 1, estado: "Pagado", k: 4, cubre: 3 }, // Diego cubrió a Marcos
   { cobrador: 2, estado: "Pagado", k: 0, cubre: 1 }, // Marcos cubrió a Luis
 ];
 
@@ -322,13 +320,10 @@ const ASISTENCIAS: Array<{ cobrador: number; estado: PagoEstado; k: number; cubr
 function paidOffset(estado: PagoEstado, due: number): number | null {
   switch (estado) {
     case "Pagado":
-      return due; // a tiempo
-    case "Adelanto":
-      return 0; // pagada hoy, por adelantado
-    case "Recargo":
-      return Math.min(due + 2, 0); // pagada tarde (en el pasado)
+      // Si vencía en el futuro se cobró hoy (adelantada); si no, el día que vencía.
+      return due > 0 ? 0 : due;
     default:
-      return null; // Pendiente / Incomunicado: sin pago
+      return null; // Pendiente: sin pago
   }
 }
 

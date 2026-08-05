@@ -17,8 +17,14 @@ import {
   type FilaPersona,
 } from "@/services/mapear";
 import { addDays, todayISO } from "@/lib/format";
-import { CONCEPTO_POR_ESTADO } from "@/lib/status";
-import type { ClienteListado, CobroDelDia, FiltroCobros, RegistrarPagoPayload } from "@/types";
+import { CONCEPTO_POR_TIPO, tipoDeCobro } from "@/lib/status";
+import type {
+  ClienteListado,
+  CobroDelDia,
+  FiltroCobros,
+  RegistrarAdvertenciaPayload,
+  RegistrarPagoPayload,
+} from "@/types";
 
 /**
  * Worklist de cobros del cobrador para la fecha de trabajo (ventana de días
@@ -109,8 +115,8 @@ async function cargarContexto(): Promise<{
 }
 
 /**
- * Registra el pago con un click (pagado / adelanto / recargo / incomunicado).
- * Guarda quién cobró (asistencia si ≠ asignado) y si fue dentro de rango.
+ * Registra el cobro. La cuota queda `Pagado` cobre lo que cobre: cuánto entró
+ * se ve en el monto abonado, no en el estado (decisión N.4).
  */
 export async function registrarPago(payload: RegistrarPagoPayload): Promise<CobroDelDia> {
   if (USE_MOCK) {
@@ -118,45 +124,87 @@ export async function registrarPago(payload: RegistrarPagoPayload): Promise<Cobr
     const pp = db.pagosPorRealizar.find((p) => p.id === payload.pagoId);
     if (!pp) throw new Error("Pago no encontrado.");
 
-    const cobro = toCobroDelDia(db, pp);
-    const asignadoId = cobro?.cobradorAsignadoId ?? payload.cobradorId;
-    // Fuera de rango: lo cobró alguien distinto al asignado (asistencia)
-    const dentroRango = payload.cobradorId === asignadoId;
+    const tipo = tipoDeCobro(payload.monto, pp.montoEsperado);
 
-    pp.estado = payload.estado;
-    pp.dentroRango = dentroRango;
+    pp.estado = "Pagado";
+    // El mock no tiene el domicilio del cliente para medir los 2 km, así que
+    // se aproxima con "vino con ubicación". La cuenta real la hace el SP.
+    pp.dentroRango = payload.lat != null && payload.lon != null;
 
-    // Incomunicado no genera pago realizado (no se cobró dinero)
-    db.pagosRealizados = db.pagosRealizados.filter((pr) => pr.idPago !== pp.id);
-    if (payload.estado !== "Incomunicado") {
-      db.pagosRealizados.push({
-        id: nextId(db.pagosRealizados),
-        idPago: pp.id,
-        idCobrador: payload.cobradorId,
-        concepto: payload.concepto || CONCEPTO_POR_ESTADO[payload.estado],
-        fechaDePago: todayISO(),
+    // El cobro parcial cobra lo que entró y deja una cuota nueva por la
+    // diferencia, con la fecha pactada. Es lo que hace sp_PagoParcial.
+    if (tipo === "parcial" && payload.nuevaFecha) {
+      db.pagosPorRealizar.push({
+        ...pp,
+        id: nextId(db.pagosPorRealizar),
+        montoEsperado: pp.montoEsperado - payload.monto,
+        fechaAcordada: payload.nuevaFecha,
+        estado: "Pendiente",
+        dentroRango: null,
       });
     }
+
+    db.pagosRealizados = db.pagosRealizados.filter((pr) => pr.idPago !== pp.id);
+    db.pagosRealizados.push({
+      id: nextId(db.pagosRealizados),
+      idPago: pp.id,
+      idCobrador: payload.cobradorId,
+      concepto: payload.concepto || CONCEPTO_POR_TIPO[tipo],
+      fechaDePago: todayISO(),
+    });
+
     saveDb();
     const actualizado = toCobroDelDia(db, pp);
     if (!actualizado) throw new Error("Cobro inconsistente.");
     return delay(actualizado);
   }
-  // TODO fase B — registrar el cobro contra la API necesita tres cosas que el
-  // front todavía no modela, y ninguna es de cableado:
-  //
-  //   N.6  `id_metodo_de_pago` es OBLIGATORIO en POST /cobros. La lista sale
-  //        de getMetodosDePago(); falta el selector en registro-dialog.
-  //   N.6  el cobro parcial manda `monto` < esperado y `nueva_fecha`. Hoy el
-  //        registro es de un click y no pregunta monto.
-  //   N.5  `lat`/`lon` son opcionales pero definen `Dentro_Rango` (≤ 2 km del
-  //        domicilio). Sin ellos todo cobro queda en 0 y la función se muere
-  //        sin usarse. Falta pedir geolocalización.
-  //
-  // Además el endpoint es POST /cobros con `id_cuota` en el body, no
-  // PATCH /cobros/{id}: este router no tiene path params.
-  throw new Error(
-    "Registrar el cobro contra la API está pendiente (fase B: método de pago, " +
-      "monto parcial y geolocalización). Por ahora corré con NEXT_PUBLIC_USE_MOCK=true.",
-  );
+  // Un solo POST para los tres SP de cobro: el tipo lo deduce la API del
+  // monto (igual / menor / mayor al esperado), así el front no puede elegir
+  // mal. El id de la cuota va en el body: este router no tiene path params.
+  const { data } = await api.post<{
+    tipo: string;
+    id_cuota: number;
+    sin_ubicacion: boolean;
+  }>("/cobros", {
+    id_cuota: payload.pagoId,
+    monto: payload.monto,
+    id_metodo_de_pago: payload.idMetodoDePago,
+    // El SP del cobro parcial crea una cuota nueva por la diferencia con esta
+    // fecha; en los otros dos casos la API lo ignora.
+    nueva_fecha: payload.nuevaFecha,
+    concepto: payload.concepto,
+    // Sin ubicación la API responde sin_ubicacion:true y deja Dentro_Rango en
+    // 0. Nunca rechaza el cobro por eso (N.5).
+    lat: payload.lat ?? undefined,
+    lon: payload.lon ?? undefined,
+  });
+
+  // La respuesta trae la cuota actualizada pero no el cliente ni el plan
+  // cruzados, así que se relee la cuota ya armada.
+  const cuotas = await getHistorico();
+  const actualizada = cuotas.find((c) => c.id === data.id_cuota);
+  if (!actualizada) throw new Error("El cobro se registró pero no se pudo releer la cuota.");
+  return actualizada;
+}
+
+/**
+ * Registra una advertencia sobre el plan — es lo que reemplaza al viejo estado
+ * "Incomunicado" (decisión N.4).
+ *
+ * Cuelga del plan, no de la cuota, y no toca `Pagos_por_realizar.Estado`: la
+ * cuota sigue pendiente. Si lleva recargo, `/estado_cuenta` lo devuelve como
+ * un movimiento propio y lo suma al saldo (N.2).
+ */
+export async function registrarAdvertencia(
+  payload: RegistrarAdvertenciaPayload,
+): Promise<void> {
+  if (USE_MOCK) {
+    await delay(null, 300);
+    return;
+  }
+  await api.post("/advertencias", {
+    id_plan: payload.planId,
+    Motivo: payload.motivo,
+    Recargo: payload.recargo,
+  });
 }

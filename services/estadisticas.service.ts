@@ -76,9 +76,11 @@ export async function getEstadisticas(
     const totalDinero = [...dineroPorFecha.values()].reduce((s, v) => s + v, 0);
     const promedioDiario = dineroPorFecha.size > 0 ? totalDinero / dineroPorFecha.size : 0;
 
-    // Dinero perdido: cuotas de mis clientes incomunicadas o vencidas (en la ventana)
+    // Dinero perdido: cuotas de mis clientes ya vencidas (en la ventana).
+    // "Incomunicado" ya no es un estado de cuota (N.4): esas cuotas siguen
+    // pendientes y entran acá por fecha, como cualquier otra vencida.
     const dineroPerdido = cobrosMios
-      .filter((c) => c.estado === "Incomunicado" || esVencido(c.estado, c.fechaAcordada, hoy))
+      .filter((c) => esVencido(c.estado, c.fechaAcordada, hoy))
       .reduce((s, c) => s + c.montoEsperado, 0);
 
     const stats: EstadisticasCobrador = {

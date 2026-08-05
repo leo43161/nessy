@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { AlertTriangle, Loader2, Phone, ReceiptText, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -17,11 +19,17 @@ import { StatusBadge } from "@/components/shared/status-badge";
 import { WhatsappButton } from "@/components/shared/whatsapp-button";
 import { EstadoCuentaDialog } from "@/components/clientes/estado-cuenta-dialog";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import { registrarPago } from "@/store/slices/cobros.slice";
-import { cn } from "@/lib/utils";
+import { registrarAdvertencia, registrarPago } from "@/store/slices/cobros.slice";
+import { useMetodosDePago } from "@/hooks/use-catalogos";
+import { obtenerUbicacion } from "@/lib/geo";
 import { fmtMoney, formatFecha } from "@/lib/format";
-import { esCobrado, esVencido, ESTADOS_REGISTRABLES, PAGO_ESTADO } from "@/lib/status";
-import type { CobroDelDia, PagoEstado } from "@/types";
+import {
+  esVencido,
+  MOTIVOS_ADVERTENCIA,
+  TIPO_DE_COBRO_LABEL,
+  tipoDeCobro,
+} from "@/lib/status";
+import type { CobroDelDia } from "@/types";
 
 interface RegistroDialogProps {
   cobro: CobroDelDia | null;
@@ -30,38 +38,99 @@ interface RegistroDialogProps {
   onVerCliente: (clienteId: number) => void;
 }
 
-/** Registro de cobro con un click (pagado / adelanto / recargo / incomunicado) */
+/**
+ * Registro de cobro.
+ *
+ * El cobrador pone cuánto entró y el método; el resto lo deduce la API. Si no
+ * pudo cobrar, deja una advertencia sobre el plan en vez de un estado en la
+ * cuota (decisión N.4).
+ */
 export function RegistroDialog({ cobro, open, onOpenChange, onVerCliente }: RegistroDialogProps) {
   const dispatch = useAppDispatch();
   const cobrador = useAppSelector((s) => s.auth.cobrador);
   const workDate = useAppSelector((s) => s.ui.workDate);
-  const [registrando, setRegistrando] = useState<PagoEstado | null>(null);
+  const metodos = useMetodosDePago();
+
+  const [registrando, setRegistrando] = useState(false);
   const [estadoCuentaOpen, setEstadoCuentaOpen] = useState(false);
+  const [advertenciaOpen, setAdvertenciaOpen] = useState(false);
+  const [monto, setMonto] = useState("");
+  const [idMetodo, setIdMetodo] = useState(0);
+  const [nuevaFecha, setNuevaFecha] = useState("");
+  const [motivo, setMotivo] = useState(MOTIVOS_ADVERTENCIA[0]);
+
+  // Al abrir sobre otra cuota, el monto arranca en lo esperado: el caso normal
+  // es cobrar justo, y así el cobrador confirma en vez de tipear.
+  useEffect(() => {
+    if (open && cobro) setMonto(String(cobro.montoEsperado));
+  }, [open, cobro]);
+
+  useEffect(() => {
+    if (idMetodo === 0 && metodos.length > 0) setIdMetodo(metodos[0].id);
+  }, [metodos, idMetodo]);
 
   if (!cobro || !cobrador) return null;
 
   const { cliente } = cobro;
   const vencido = esVencido(cobro.estado, cobro.fechaAcordada, workDate ?? "");
+  const yaCobrada = cobro.estado === "Pagado";
+  const montoNum = Number(monto) || 0;
+  const tipo = tipoDeCobro(montoNum, cobro.montoEsperado);
+  const puedeCobrar =
+    !registrando &&
+    montoNum > 0 &&
+    idMetodo > 0 &&
+    (tipo !== "parcial" || nuevaFecha !== "");
   // Asistencia: el cobrador logueado no es el asignado → se marcará fuera de rango
   const asistiendo = cobrador.id !== cobro.cobradorAsignadoId;
   const mensajeDemora = `Hola ${cliente.nombreCompleto.split(" ")[0]}! Te recordamos la cuota pendiente de ${fmtMoney(cobro.montoEsperado)} (${formatFecha(cobro.fechaAcordada)}). ¿Coordinamos el pago?`;
 
-  const registrar = async (estado: Exclude<PagoEstado, "Pendiente">) => {
-    setRegistrando(estado);
+  const registrar = async () => {
+    setRegistrando(true);
+
+    // N.5: la ubicación decide Dentro_Rango (≤ 2 km del domicilio), pero nunca
+    // bloquea el cobro. Si el navegador no la da, se manda en null.
+    const ubicacion = await obtenerUbicacion();
+
     const result = await dispatch(
-      registrarPago({ pagoId: cobro.id, estado, cobradorId: cobrador.id })
+      registrarPago({
+        pagoId: cobro.id,
+        monto: montoNum,
+        idMetodoDePago: idMetodo,
+        nuevaFecha: tipo === "parcial" ? nuevaFecha : undefined,
+        cobradorId: cobrador.id,
+        lat: ubicacion?.lat ?? null,
+        lon: ubicacion?.lon ?? null,
+      }),
     );
-    setRegistrando(null);
+    setRegistrando(false);
+
     if (registrarPago.fulfilled.match(result)) {
-      toast.success(`${cliente.nombreCompleto}: ${PAGO_ESTADO[estado].label}`);
+      toast.success(`${cliente.nombreCompleto}: ${fmtMoney(montoNum)} cobrados`, {
+        description: ubicacion ? undefined : "Sin ubicación: quedará fuera de rango.",
+      });
       // Tras cobrar, ofrecer enviar el estado de cuenta al cliente
-      if (esCobrado(estado)) {
-        setEstadoCuentaOpen(true);
-      } else {
-        onOpenChange(false);
-      }
+      setEstadoCuentaOpen(true);
     } else {
       toast.error(result.payload ?? "No se pudo registrar el pago.");
+    }
+  };
+
+  const guardarAdvertencia = async () => {
+    setRegistrando(true);
+    const result = await dispatch(
+      registrarAdvertencia({ planId: cobro.planId, motivo }),
+    );
+    setRegistrando(false);
+
+    if (registrarAdvertencia.fulfilled.match(result)) {
+      // La cuota NO cambia de estado: sigue pendiente. Lo que queda registrado
+      // es por qué no se pudo cobrar (N.4).
+      toast.success(`Advertencia registrada: ${motivo}`);
+      setAdvertenciaOpen(false);
+      onOpenChange(false);
+    } else {
+      toast.error(result.payload ?? "No se pudo registrar la advertencia.");
     }
   };
 
@@ -111,32 +180,89 @@ export function RegistroDialog({ cobro, open, onOpenChange, onVerCliente }: Regi
             </div>
           )}
 
-          <div>
-            <div className="mb-2 text-xs font-bold tracking-wider text-muted-foreground uppercase">
-              Registrar con un click
+          {yaCobrada ? (
+            <div className="rounded-lg border border-green-300 bg-green-50 px-3 py-2 text-sm text-green-800 dark:border-green-800 dark:bg-green-950/50 dark:text-green-200">
+              Esta cuota ya está cobrada. La API rechaza un segundo cobro (409).
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              {ESTADOS_REGISTRABLES.map((estado) => (
-                <button
-                  key={estado}
-                  type="button"
-                  disabled={registrando != null}
-                  onClick={() => registrar(estado)}
-                  className={cn(
-                    "flex items-center justify-center gap-1.5 rounded-lg border-2 px-2 py-3 text-sm font-bold transition-all hover:-translate-y-px disabled:opacity-50",
-                    PAGO_ESTADO[estado].selected,
-                    cobro.estado === estado && "ring-2 ring-offset-1 ring-offset-background"
+          ) : (
+            <div className="space-y-3">
+              <div className="text-xs font-bold tracking-wider text-muted-foreground uppercase">
+                Registrar cobro
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="monto">Monto cobrado</Label>
+                <Input
+                  id="monto"
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  step="0.01"
+                  value={monto}
+                  onChange={(e) => setMonto(e.target.value)}
+                  disabled={registrando}
+                />
+                {/* El tipo no se elige: lo deduce la API del monto. Se muestra
+                    para que el cobrador vea qué va a pasar antes de confirmar. */}
+                <p className="text-xs text-muted-foreground">
+                  {montoNum > 0 ? TIPO_DE_COBRO_LABEL[tipo] : "Ingresá cuánto entró"}
+                  {tipo === "adelantado" && montoNum > 0 && (
+                    <> · el sobrante de {fmtMoney(montoNum - cobro.montoEsperado)} cancela cuotas futuras</>
                   )}
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="metodo">Método de pago</Label>
+                <select
+                  id="metodo"
+                  value={idMetodo}
+                  onChange={(e) => setIdMetodo(Number(e.target.value))}
+                  disabled={registrando || metodos.length === 0}
+                  className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs disabled:opacity-50"
                 >
-                  {registrando === estado ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    PAGO_ESTADO[estado].label
-                  )}
-                </button>
-              ))}
+                  {metodos.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.nombre}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* El SP del cobro parcial crea una cuota nueva por la diferencia:
+                  sin fecha no sabe cuándo vence. */}
+              {tipo === "parcial" && montoNum > 0 && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="nuevaFecha">
+                    ¿Cuándo paga los {fmtMoney(cobro.montoEsperado - montoNum)} restantes?
+                  </Label>
+                  <Input
+                    id="nuevaFecha"
+                    type="date"
+                    value={nuevaFecha}
+                    min={cobro.fechaAcordada}
+                    onChange={(e) => setNuevaFecha(e.target.value)}
+                    disabled={registrando}
+                  />
+                </div>
+              )}
+
+              <Button className="w-full" disabled={!puedeCobrar} onClick={registrar}>
+                {registrando ? <Loader2 className="animate-spin" /> : <ReceiptText />}
+                {registrando ? "Registrando…" : `Cobrar ${fmtMoney(montoNum)}`}
+              </Button>
+
+              <Button
+                variant="outline"
+                className="w-full"
+                disabled={registrando}
+                onClick={() => setAdvertenciaOpen(true)}
+              >
+                <AlertTriangle />
+                No pude cobrar
+              </Button>
             </div>
-          </div>
+          )}
 
           <div className="grid grid-cols-3 gap-2">
             <ActionButton
@@ -165,6 +291,46 @@ export function RegistroDialog({ cobro, open, onOpenChange, onVerCliente }: Regi
             </Button>
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               Cerrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* "No pude cobrar" → advertencia sobre el plan. La cuota no cambia de
+          estado: sigue pendiente, y queda registrado el motivo (N.4). */}
+      <Dialog open={advertenciaOpen} onOpenChange={setAdvertenciaOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>No se pudo cobrar</DialogTitle>
+            <DialogDescription>
+              Queda registrado el motivo. La cuota sigue pendiente.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="motivo">Motivo</Label>
+            <select
+              id="motivo"
+              value={motivo}
+              onChange={(e) => setMotivo(e.target.value)}
+              disabled={registrando}
+              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs disabled:opacity-50"
+            >
+              {MOTIVOS_ADVERTENCIA.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAdvertenciaOpen(false)}>
+              Cancelar
+            </Button>
+            <Button disabled={registrando} onClick={guardarAdvertencia}>
+              {registrando ? <Loader2 className="animate-spin" /> : <AlertTriangle />}
+              Registrar
             </Button>
           </DialogFooter>
         </DialogContent>
