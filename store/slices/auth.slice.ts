@@ -1,4 +1,5 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
+import axios from "axios";
 import * as authService from "@/services/auth.service";
 import {
   clearSession,
@@ -35,10 +36,23 @@ export const login = createAsyncThunk<LoginResponse, LoginPayload, { rejectValue
       persistSession(res);
       return res;
     } catch (err) {
-      return rejectWithValue(err instanceof Error ? err.message : "No se pudo iniciar sesión.");
+      // La API explica el problema mucho mejor que axios: distingue
+      // credenciales incorrectas (401) de una cuenta sin rol asignado (403).
+      // Sin esto el usuario ve "Request failed with status code 403", que no
+      // dice nada y manda a buscar el problema en el lugar equivocado.
+      return rejectWithValue(mensajeDeError(err, "No se pudo iniciar sesión."));
     }
   }
 );
+
+/** Saca el `message` que manda la API; si no hay, usa el genérico. */
+function mensajeDeError(e: unknown, porDefecto: string): string {
+  if (axios.isAxiosError(e)) {
+    const msg = (e.response?.data as { message?: string } | undefined)?.message;
+    if (msg) return msg;
+  }
+  return e instanceof Error ? e.message : porDefecto;
+}
 
 /** Restaura la sesión guardada y la valida contra la API; si expiró, vuelve al login */
 export const restoreSession = createAsyncThunk<LoginResponse, void, { rejectValue: string }>(
