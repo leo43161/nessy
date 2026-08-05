@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { HandCoins, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { login } from "@/store/slices/auth.slice";
 import { APP_NAME } from "@/lib/constants";
+import { getToken } from "@/lib/session";
 import { USE_MOCK } from "@/services/api";
 
 export default function LoginPage() {
@@ -18,6 +19,17 @@ export default function LoginPage() {
   const [usuario, setUsuario] = useState("");
   const [password, setPassword] = useState("");
   const cargando = status === "loading";
+
+  // Con sesión abierta, /login no tiene nada que mostrar. Antes lo cortaba
+  // proxy.ts leyendo la cookie; con output:"export" no hay servidor que la
+  // lea, así que el rebote se hace acá.
+  //
+  // Es optimista igual que el proxy: mira que el token esté, no que sirva.
+  // Si está vencido, el layout lo valida, hace clearSession() y devuelve acá
+  // — un rebote y se queda, porque ya no hay token que leer.
+  useEffect(() => {
+    if (getToken()) router.replace("/cobros");
+  }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
