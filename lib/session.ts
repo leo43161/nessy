@@ -1,29 +1,35 @@
 import { TOKEN_COOKIE, TOKEN_KEY, USER_KEY } from "@/lib/constants";
-import type { Cobrador } from "@/types";
+import type { Cobrador, Cuenta, LoginResponse } from "@/types";
 
 // El token vive en cookie (la lee proxy.ts para proteger rutas)
 // y en localStorage (lo lee axios para el header Authorization).
+// La cuenta + cobrador se guardan juntos para restaurar la sesión.
+
+interface StoredSession {
+  cuenta: Cuenta;
+  cobrador: Cobrador;
+}
 
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;
   return localStorage.getItem(TOKEN_KEY);
 }
 
-export function getStoredUser(): Cobrador | null {
+export function getStoredSession(): StoredSession | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = localStorage.getItem(USER_KEY);
-    return raw ? (JSON.parse(raw) as Cobrador) : null;
+    return raw ? (JSON.parse(raw) as StoredSession) : null;
   } catch {
     return null;
   }
 }
 
-export function persistSession(token: string, usuario: Cobrador): void {
-  localStorage.setItem(TOKEN_KEY, token);
-  localStorage.setItem(USER_KEY, JSON.stringify(usuario));
+export function persistSession(res: LoginResponse): void {
+  localStorage.setItem(TOKEN_KEY, res.token);
+  localStorage.setItem(USER_KEY, JSON.stringify({ cuenta: res.cuenta, cobrador: res.cobrador }));
   const maxAge = 60 * 60 * 8; // 8h, igual que la expiración del token
-  document.cookie = `${TOKEN_COOKIE}=${token}; path=/; max-age=${maxAge}; SameSite=Lax`;
+  document.cookie = `${TOKEN_COOKIE}=${res.token}; path=/; max-age=${maxAge}; SameSite=Lax`;
 }
 
 export function clearSession(): void {

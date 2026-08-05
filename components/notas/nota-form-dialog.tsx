@@ -14,42 +14,48 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { useAppDispatch } from "@/store/hooks";
-import { createNota } from "@/store/slices/notas.slice";
+import { createNota, editNota } from "@/store/slices/notas.slice";
 
-interface ClienteRef {
-  id: number;
-  nombre: string;
+export interface NotaFormTarget {
+  clienteId: number;
+  clienteNombre: string;
+  /** Presente si se está editando una nota existente */
+  notaId?: number;
+  contenidoInicial?: string;
 }
 
 interface NotaFormDialogProps {
-  cliente: ClienteRef | null;
+  target: NotaFormTarget | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onSaved?: () => void;
 }
 
-/** Alta de nota sobre un cliente (se abre desde cobros, clientes o balance) */
-export function NotaFormDialog({ cliente, open, onOpenChange }: NotaFormDialogProps) {
-  if (!cliente) return null;
+/** Alta o edición de una nota de cliente */
+export function NotaFormDialog({ target, open, onOpenChange, onSaved }: NotaFormDialogProps) {
+  if (!target) return null;
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
-        {/* Montado al abrir: siempre arranca vacío */}
-        <NotaForm cliente={cliente} onOpenChange={onOpenChange} />
+        <NotaForm target={target} onOpenChange={onOpenChange} onSaved={onSaved} />
       </DialogContent>
     </Dialog>
   );
 }
 
 function NotaForm({
-  cliente,
+  target,
   onOpenChange,
+  onSaved,
 }: {
-  cliente: ClienteRef;
+  target: NotaFormTarget;
   onOpenChange: (open: boolean) => void;
+  onSaved?: () => void;
 }) {
   const dispatch = useAppDispatch();
-  const [contenido, setContenido] = useState("");
+  const [contenido, setContenido] = useState(target.contenidoInicial ?? "");
   const [guardando, setGuardando] = useState(false);
+  const editando = target.notaId != null;
 
   const guardar = async () => {
     if (!contenido.trim()) {
@@ -57,22 +63,26 @@ function NotaForm({
       return;
     }
     setGuardando(true);
-    const result = await dispatch(createNota({ clienteId: cliente.id, contenido: contenido.trim() }));
+    const result = editando
+      ? await dispatch(editNota({ notaId: target.notaId!, contenido: contenido.trim() }))
+      : await dispatch(createNota({ clienteId: target.clienteId, contenido: contenido.trim() }));
     setGuardando(false);
-    if (createNota.fulfilled.match(result)) {
-      toast.success("Nota guardada.");
+    const ok = editando ? editNota.fulfilled.match(result) : createNota.fulfilled.match(result);
+    if (ok) {
+      toast.success(editando ? "Nota actualizada." : "Nota guardada.");
+      onSaved?.();
       onOpenChange(false);
     } else {
-      toast.error(result.payload ?? "No se pudo guardar la nota.");
+      toast.error("No se pudo guardar la nota.");
     }
   };
 
   return (
     <>
       <DialogHeader>
-        <DialogTitle className="text-center">Nueva Nota</DialogTitle>
+        <DialogTitle className="text-center">{editando ? "Editar Nota" : "Nueva Nota"}</DialogTitle>
         <DialogDescription className="text-center font-semibold text-foreground">
-          {cliente.nombre}
+          {target.clienteNombre}
         </DialogDescription>
       </DialogHeader>
       <Textarea
@@ -88,7 +98,7 @@ function NotaForm({
         </Button>
         <Button onClick={guardar} disabled={guardando || !contenido.trim()}>
           {guardando && <Loader2 className="animate-spin" />}
-          Guardar Nota
+          {editando ? "Guardar cambios" : "Guardar Nota"}
         </Button>
       </DialogFooter>
     </>

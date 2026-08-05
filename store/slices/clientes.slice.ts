@@ -1,92 +1,45 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import * as clientesService from "@/services/clientes.service";
-import type {
-  ClienteResumen,
-  NuevoCargoPayload,
-  NuevoClientePayload,
-  NuevoPagoPayload,
-  Transaccion,
-} from "@/types";
+import type { ClienteDetalle, ClienteListado, FiltroClientes } from "@/types";
 
 type LoadStatus = "idle" | "loading" | "succeeded" | "failed";
 
-interface ClienteDetalle {
-  cliente: ClienteResumen | null;
-  transacciones: Transaccion[];
-  status: LoadStatus;
-}
-
 interface ClientesState {
-  items: ClienteResumen[];
+  items: ClienteListado[];
   status: LoadStatus;
   error: string | null;
-  detalle: ClienteDetalle;
+  detalle: {
+    data: ClienteDetalle | null;
+    status: LoadStatus;
+  };
 }
 
 const initialState: ClientesState = {
   items: [],
   status: "idle",
   error: null,
-  detalle: { cliente: null, transacciones: [], status: "idle" },
+  detalle: { data: null, status: "idle" },
 };
 
-export const fetchClientes = createAsyncThunk<ClienteResumen[], number, { rejectValue: string }>(
-  "clientes/fetch",
-  async (cobradorId, { rejectWithValue }) => {
-    try {
-      return await clientesService.getClientes(cobradorId);
-    } catch {
-      return rejectWithValue("No se pudieron cargar los clientes.");
-    }
-  }
-);
-
-/** Cliente + historial de transacciones para el modal de balance */
-export const fetchClienteDetalle = createAsyncThunk<
-  { cliente: ClienteResumen; transacciones: Transaccion[] },
-  number,
+export const fetchClientes = createAsyncThunk<
+  ClienteListado[],
+  FiltroClientes,
   { rejectValue: string }
->("clientes/detalle", async (clienteId, { rejectWithValue }) => {
+>("clientes/fetch", async (filtro, { rejectWithValue }) => {
   try {
-    const [cliente, transacciones] = await Promise.all([
-      clientesService.getCliente(clienteId),
-      clientesService.getTransacciones(clienteId),
-    ]);
-    return { cliente, transacciones };
+    return await clientesService.getClientes(filtro);
   } catch {
-    return rejectWithValue("No se pudo cargar el balance del cliente.");
+    return rejectWithValue("No se pudieron cargar los clientes.");
   }
 });
 
-export const createCliente = createAsyncThunk<ClienteResumen, NuevoClientePayload, { rejectValue: string }>(
-  "clientes/create",
-  async (payload, { rejectWithValue }) => {
+export const fetchClienteDetalle = createAsyncThunk<ClienteDetalle, number, { rejectValue: string }>(
+  "clientes/detalle",
+  async (clienteId, { rejectWithValue }) => {
     try {
-      return await clientesService.crearCliente(payload);
+      return await clientesService.getClienteDetalle(clienteId);
     } catch {
-      return rejectWithValue("No se pudo guardar el cliente.");
-    }
-  }
-);
-
-export const addCargo = createAsyncThunk<Transaccion, NuevoCargoPayload, { rejectValue: string }>(
-  "clientes/cargo",
-  async (payload, { rejectWithValue }) => {
-    try {
-      return await clientesService.crearCargo(payload);
-    } catch {
-      return rejectWithValue("No se pudo registrar el cargo.");
-    }
-  }
-);
-
-export const addPago = createAsyncThunk<Transaccion, NuevoPagoPayload, { rejectValue: string }>(
-  "clientes/pago",
-  async (payload, { rejectWithValue }) => {
-    try {
-      return await clientesService.crearPago(payload);
-    } catch {
-      return rejectWithValue("No se pudo registrar el pago.");
+      return rejectWithValue("No se pudo cargar el cliente.");
     }
   }
 );
@@ -96,7 +49,7 @@ const clientesSlice = createSlice({
   initialState,
   reducers: {
     clearDetalle(state) {
-      state.detalle = { cliente: null, transacciones: [], status: "idle" };
+      state.detalle = { data: null, status: "idle" };
     },
   },
   extraReducers: (builder) => {
@@ -118,14 +71,10 @@ const clientesSlice = createSlice({
       })
       .addCase(fetchClienteDetalle.fulfilled, (state, action) => {
         state.detalle.status = "succeeded";
-        state.detalle.cliente = action.payload.cliente;
-        state.detalle.transacciones = action.payload.transacciones;
+        state.detalle.data = action.payload;
       })
       .addCase(fetchClienteDetalle.rejected, (state) => {
         state.detalle.status = "failed";
-      })
-      .addCase(createCliente.fulfilled, (state, action) => {
-        state.items.unshift(action.payload);
       });
   },
 });

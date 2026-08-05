@@ -1,26 +1,60 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { NotaCard } from "@/components/notas/nota-card";
-import { NotaViewDialog } from "@/components/notas/nota-view-dialog";
+import { NotaFormDialog, type NotaFormTarget } from "@/components/notas/nota-form-dialog";
 import { EmptyState } from "@/components/shared/empty-state";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import { fetchNotas } from "@/store/slices/notas.slice";
-import type { Nota } from "@/types";
+import { deleteNota, fetchNotas } from "@/store/slices/notas.slice";
+import type { NotaConCliente } from "@/services/notas.service";
 
 export default function NotasPage() {
   const dispatch = useAppDispatch();
-  const usuario = useAppSelector((s) => s.auth.usuario);
+  const cobrador = useAppSelector((s) => s.auth.cobrador);
   const { items, status, error } = useAppSelector((s) => s.notas);
-  const [seleccionada, setSeleccionada] = useState<Nota | null>(null);
-  const [viewOpen, setViewOpen] = useState(false);
+
+  const [notaTarget, setNotaTarget] = useState<NotaFormTarget | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
+  const [aEliminar, setAEliminar] = useState<NotaConCliente | null>(null);
 
   useEffect(() => {
-    if (usuario) {
-      dispatch(fetchNotas(usuario.id));
+    if (cobrador) {
+      dispatch(fetchNotas(cobrador.id));
     }
-  }, [usuario, dispatch]);
+  }, [cobrador, dispatch]);
+
+  const editar = (nota: NotaConCliente) => {
+    setNotaTarget({
+      clienteId: nota.idCliente,
+      clienteNombre: nota.clienteNombre,
+      notaId: nota.id,
+      contenidoInicial: nota.nota,
+    });
+    setFormOpen(true);
+  };
+
+  const confirmarEliminar = async () => {
+    if (!aEliminar) return;
+    const result = await dispatch(deleteNota(aEliminar.id));
+    setAEliminar(null);
+    if (deleteNota.fulfilled.match(result)) {
+      toast.success("Nota eliminada.");
+    } else {
+      toast.error("No se pudo eliminar la nota.");
+    }
+  };
 
   const cargando = status === "loading" || status === "idle";
 
@@ -38,7 +72,7 @@ export default function NotasPage() {
         <EmptyState icon="📝">
           No hay notas aún.
           <br />
-          Las notas se crean desde el detalle de cada cobro o cliente.
+          Las notas se crean desde el detalle de cada cliente.
         </EmptyState>
       ) : (
         <div className="flex flex-col gap-2">
@@ -46,16 +80,34 @@ export default function NotasPage() {
             <NotaCard
               key={nota.id}
               nota={nota}
-              onClick={() => {
-                setSeleccionada(nota);
-                setViewOpen(true);
-              }}
+              onEdit={() => editar(nota)}
+              onDelete={() => setAEliminar(nota)}
             />
           ))}
         </div>
       )}
 
-      <NotaViewDialog nota={seleccionada} open={viewOpen} onOpenChange={setViewOpen} />
+      <NotaFormDialog
+        target={notaTarget}
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        onSaved={() => cobrador && dispatch(fetchNotas(cobrador.id))}
+      />
+
+      <AlertDialog open={aEliminar != null} onOpenChange={(o) => !o && setAEliminar(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar esta nota?</AlertDialogTitle>
+            <AlertDialogDescription>
+              La nota sobre {aEliminar?.clienteNombre} se eliminará de forma permanente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmarEliminar}>Eliminar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

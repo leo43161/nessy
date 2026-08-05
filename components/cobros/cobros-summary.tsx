@@ -1,23 +1,22 @@
+"use client";
+
 import { cn } from "@/lib/utils";
-import type { CobroDia } from "@/types";
+import { esCobrado } from "@/lib/status";
+import type { CobroDelDia } from "@/types";
 
-interface CobrosSummaryProps {
-  cobros: CobroDia[];
-}
-
-/** Mini-tarjetas con el resumen del día */
-export function CobrosSummary({ cobros }: CobrosSummaryProps) {
+/** Mini-tarjetas con el resumen del worklist */
+export function CobrosSummary({ cobros }: { cobros: CobroDelDia[] }) {
   const total = cobros.length;
-  const cobrados = cobros.filter((c) => c.status === "Paid").length;
-  const pendientes = cobros.filter((c) => c.status === "Pending").length;
-  const vencidos = cobros.filter((c) => c.status === "Overdue").length;
-  const ilocalizables = cobros.filter((c) => c.status === "Unreachable").length;
+  const cobrados = cobros.filter((c) => esCobrado(c.estado)).length;
+  const pendientes = cobros.filter((c) => c.estado === "Pendiente").length;
+  const recargos = cobros.filter((c) => c.estado === "Recargo").length;
+  const incomunicados = cobros.filter((c) => c.estado === "Incomunicado").length;
 
   const stats = [
     { valor: `${cobrados}/${total}`, label: "Cobrados", highlight: true },
     { valor: pendientes, label: "Pendientes" },
-    { valor: vencidos, label: "No pagó", color: "text-red-500" },
-    { valor: ilocalizables, label: "Ilocalizables", color: "text-violet-500" },
+    { valor: recargos, label: "Recargos", color: "text-amber-500" },
+    { valor: incomunicados, label: "Incomunicados", color: "text-violet-500" },
   ];
 
   return (
@@ -37,7 +36,7 @@ export function CobrosSummary({ cobros }: CobrosSummaryProps) {
           </div>
           <div
             className={cn(
-              "text-[0.6rem] font-semibold tracking-wide uppercase",
+              "text-[0.58rem] font-semibold tracking-wide uppercase",
               s.highlight ? "text-white/75" : "text-muted-foreground"
             )}
           >

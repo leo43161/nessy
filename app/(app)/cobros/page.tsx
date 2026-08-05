@@ -1,50 +1,81 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CobroCard } from "@/components/cobros/cobro-card";
-import { CobroDetailDialog } from "@/components/cobros/cobro-detail-dialog";
+import { CobrosFilters, type FiltrosState } from "@/components/cobros/cobros-filters";
 import { CobrosSummary } from "@/components/cobros/cobros-summary";
 import { DateHeader } from "@/components/cobros/date-header";
 import { FilterPills, type CobroFilter } from "@/components/cobros/filter-pills";
+import { RankingBanner } from "@/components/cobros/ranking-banner";
+import { RegistroDialog } from "@/components/cobros/registro-dialog";
+import { ClienteDetailDialog } from "@/components/clientes/cliente-detail-dialog";
 import { EmptyState } from "@/components/shared/empty-state";
-import { useClienteFlow } from "@/hooks/use-cliente-flow";
-import { useCobradores } from "@/hooks/use-cobradores";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { fetchCobros } from "@/store/slices/cobros.slice";
-import type { CobroDia } from "@/types";
+import { fetchEstadisticas } from "@/store/slices/estadisticas.slice";
+import { todayISO } from "@/lib/format";
+import type { CobroDelDia } from "@/types";
 
 export default function CobrosPage() {
   const dispatch = useAppDispatch();
-  const usuario = useAppSelector((s) => s.auth.usuario);
+  const cobrador = useAppSelector((s) => s.auth.cobrador);
   const workDate = useAppSelector((s) => s.ui.workDate);
   const { items, status, error } = useAppSelector((s) => s.cobros);
-  const cobradores = useCobradores();
+  const stats = useAppSelector((s) => s.estadisticas.data);
 
-  const [filtro, setFiltro] = useState<CobroFilter>("all");
-  const [seleccionado, setSeleccionado] = useState<CobroDia | null>(null);
-  const [detalleOpen, setDetalleOpen] = useState(false);
-  const { openBalance, openNota, dialogs } = useClienteFlow();
+  const [filtros, setFiltros] = useState<FiltrosState>({
+    busqueda: "",
+    localidadId: "todas",
+    todosCobradores: false,
+  });
+  const [estadoFilter, setEstadoFilter] = useState<CobroFilter>("all");
+  const [seleccionado, setSeleccionado] = useState<CobroDelDia | null>(null);
+  const [registroOpen, setRegistroOpen] = useState(false);
+  const [clienteId, setClienteId] = useState<number | null>(null);
+  const [clienteOpen, setClienteOpen] = useState(false);
 
+  // Carga de cobros según filtros de servidor (cobrador/localidad/fecha)
   useEffect(() => {
-    if (usuario && workDate) {
-      dispatch(fetchCobros({ cobradorId: usuario.id, fecha: workDate }));
-    }
-  }, [usuario, workDate, dispatch]);
+    if (!cobrador || !workDate) return;
+    dispatch(
+      fetchCobros({
+        fecha: workDate,
+        cobradorId: filtros.todosCobradores ? null : cobrador.id,
+        localidadId: filtros.localidadId === "todas" ? null : Number(filtros.localidadId),
+      })
+    );
+  }, [cobrador, workDate, filtros.todosCobradores, filtros.localidadId, dispatch]);
 
-  // El detalle abierto debe reflejar la versión actualizada del store
+  // Ranking / desempeño para el banner
+  useEffect(() => {
+    if (cobrador && workDate) {
+      dispatch(fetchEstadisticas({ cobradorId: cobrador.id, fecha: workDate }));
+    }
+  }, [cobrador, workDate, items, dispatch]);
+
+  // El cobro abierto refleja la versión actualizada del store
   const cobroActual = seleccionado
     ? (items.find((c) => c.id === seleccionado.id) ?? seleccionado)
     : null;
 
-  const filtrados = filtro === "all" ? items : items.filter((c) => c.status === filtro);
+  const filtrados = useMemo(() => {
+    const q = filtros.busqueda.trim().toLowerCase();
+    return items
+      .filter((c) => (estadoFilter === "all" ? true : c.estado === estadoFilter))
+      .filter((c) => (q ? c.cliente.nombreCompleto.toLowerCase().includes(q) : true));
+  }, [items, estadoFilter, filtros.busqueda]);
+
   const cargando = status === "loading" || status === "idle";
+  const hoy = workDate ?? todayISO();
 
   return (
     <>
       <DateHeader />
+      <RankingBanner stats={stats} />
       <CobrosSummary cobros={items} />
-      <FilterPills cobros={items} value={filtro} onChange={setFiltro} />
+      <CobrosFilters value={filtros} onChange={setFiltros} />
+      <FilterPills cobros={items} value={estadoFilter} onChange={setEstadoFilter} />
 
       {cargando ? (
         <div className="flex flex-col gap-2">
@@ -56,9 +87,9 @@ export default function CobrosPage() {
         <EmptyState icon="⚠️">{error}</EmptyState>
       ) : filtrados.length === 0 ? (
         <EmptyState icon="📭">
-          No hay cobros para este día.
+          No hay cobros para mostrar.
           <br />
-          Probá con otra fecha.
+          Probá con otra fecha o filtro.
         </EmptyState>
       ) : (
         <div className="flex flex-col gap-2">
@@ -66,27 +97,27 @@ export default function CobrosPage() {
             <CobroCard
               key={cobro.id}
               cobro={cobro}
-              cobradores={cobradores}
+              hoy={hoy}
+              mostrarCobrador={filtros.todosCobradores}
               onClick={() => {
                 setSeleccionado(cobro);
-                setDetalleOpen(true);
+                setRegistroOpen(true);
               }}
             />
           ))}
         </div>
       )}
 
-      <CobroDetailDialog
+      <RegistroDialog
         cobro={cobroActual}
-        open={detalleOpen}
-        onOpenChange={setDetalleOpen}
-        onNota={(cliente) => openNota({ id: cliente.id, nombre: cliente.nombre })}
-        onBalance={(clienteId) => {
-          setDetalleOpen(false);
-          openBalance(clienteId);
+        open={registroOpen}
+        onOpenChange={setRegistroOpen}
+        onVerCliente={(id) => {
+          setClienteId(id);
+          setClienteOpen(true);
         }}
       />
-      {dialogs}
+      <ClienteDetailDialog clienteId={clienteId} open={clienteOpen} onOpenChange={setClienteOpen} />
     </>
   );
 }

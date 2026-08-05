@@ -1,41 +1,67 @@
 import { api, USE_MOCK } from "@/services/api";
 import { delay, getDb, nextId, saveDb } from "@/services/mock/db";
 import { todayISO } from "@/lib/format";
-import type { Nota, NuevaNotaPayload } from "@/types";
+import type { EditarNotaPayload, Nota, NuevaNotaPayload } from "@/types";
+
+export interface NotaConCliente extends Nota {
+  clienteNombre: string;
+}
+
+function conNombre(nota: Nota): NotaConCliente {
+  const db = getDb();
+  return {
+    ...nota,
+    clienteNombre: db.clientes.find((c) => c.id === nota.idCliente)?.nombreCompleto ?? "Cliente",
+  };
+}
 
 /** Notas sobre los clientes del cobrador (más recientes primero) */
-export async function getNotas(cobradorId: number): Promise<Nota[]> {
+export async function getNotas(cobradorId: number): Promise<NotaConCliente[]> {
   if (USE_MOCK) {
     const db = getDb();
     const misClientes = new Set(
-      db.schedules.filter((s) => s.cobradorId === cobradorId).map((s) => s.clienteId)
+      db.clienteCobrador.filter((cc) => cc.idCobrador === cobradorId).map((cc) => cc.idCliente)
     );
     const notas = db.notas
-      .filter((n) => misClientes.has(n.clienteId))
+      .filter((n) => misClientes.has(n.idCliente))
       .slice()
-      .sort((a, b) => b.fecha.localeCompare(a.fecha) || b.id - a.id);
+      .sort((a, b) => b.fechaDeCreacion.localeCompare(a.fechaDeCreacion) || b.id - a.id)
+      .map(conNombre);
     return delay(notas);
   }
-  const { data } = await api.get<Nota[]>("/notas", { params: { cobradorId } });
+  const { data } = await api.get<NotaConCliente[]>("/notas", { params: { cobradorId } });
   return data;
 }
 
-export async function crearNota(payload: NuevaNotaPayload): Promise<Nota> {
+export async function crearNota(payload: NuevaNotaPayload): Promise<NotaConCliente> {
   if (USE_MOCK) {
     const db = getDb();
-    const cliente = db.clientes.find((c) => c.id === payload.clienteId);
     const nota: Nota = {
       id: nextId(db.notas),
-      clienteId: payload.clienteId,
-      clienteNombre: cliente?.nombre ?? "Cliente",
-      contenido: payload.contenido,
-      fecha: todayISO(),
+      idCliente: payload.clienteId,
+      nota: payload.contenido,
+      fechaDeCreacion: todayISO(),
+      fechaUltimaEdicion: null,
     };
     db.notas.push(nota);
     saveDb();
-    return delay(nota);
+    return delay(conNombre(nota));
   }
-  const { data } = await api.post<Nota>("/notas", payload);
+  const { data } = await api.post<NotaConCliente>("/notas", payload);
+  return data;
+}
+
+export async function editarNota(payload: EditarNotaPayload): Promise<NotaConCliente> {
+  if (USE_MOCK) {
+    const db = getDb();
+    const nota = db.notas.find((n) => n.id === payload.notaId);
+    if (!nota) throw new Error("Nota no encontrada.");
+    nota.nota = payload.contenido;
+    nota.fechaUltimaEdicion = todayISO();
+    saveDb();
+    return delay(conNombre(nota));
+  }
+  const { data } = await api.put<NotaConCliente>(`/notas/${payload.notaId}`, payload);
   return data;
 }
 

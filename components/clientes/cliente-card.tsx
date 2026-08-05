@@ -1,18 +1,20 @@
 "use client";
 
+import { MapPin } from "lucide-react";
 import { InitialsAvatar } from "@/components/shared/initials-avatar";
 import { cn } from "@/lib/utils";
-import { fmtMoney } from "@/lib/format";
 import { CLIENTE_BORDER } from "@/lib/status";
-import type { ClienteResumen } from "@/types";
+import type { ClienteListado } from "@/types";
 
 interface ClienteCardProps {
-  cliente: ClienteResumen;
+  cliente: ClienteListado;
+  /** true → muestra el cobrador asignado (modo "todos los clientes") */
+  mostrarCobrador?: boolean;
   onClick: () => void;
 }
 
-export function ClienteCard({ cliente, onClick }: ClienteCardProps) {
-  const moroso = cliente.estatus === "Moroso";
+export function ClienteCard({ cliente, mostrarCobrador, onClick }: ClienteCardProps) {
+  const moroso = cliente.status === "Moroso";
 
   return (
     <button
@@ -20,24 +22,27 @@ export function ClienteCard({ cliente, onClick }: ClienteCardProps) {
       onClick={onClick}
       className={cn(
         "flex w-full cursor-pointer items-center gap-3.5 rounded-xl border border-l-4 bg-card px-4 py-3.5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md",
-        CLIENTE_BORDER[cliente.estatus]
+        CLIENTE_BORDER[cliente.status]
       )}
     >
-      <InitialsAvatar nombre={cliente.nombre} moroso={moroso} size="md" />
+      <InitialsAvatar nombre={cliente.nombreCompleto} moroso={moroso} size="md" />
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm font-bold">
-          {cliente.nombre}
+          {cliente.nombreCompleto}
           {moroso && " ⚠️"}
         </div>
-        <div className="text-xs text-muted-foreground">{cliente.estatus}</div>
+        <div className="flex items-center gap-1 text-[0.7rem] text-muted-foreground">
+          <MapPin className="size-3 shrink-0" />
+          <span className="truncate">{cliente.localidadNombre ?? "Sin localidad"}</span>
+        </div>
       </div>
       <div className="shrink-0 text-right">
-        <div className="font-mono text-sm font-bold">
-          {fmtMoney(cliente.totalCobrado, cliente.moneda)}
-        </div>
-        <div className="mt-0.5 text-[0.68rem] text-muted-foreground">
-          {cliente.frecuencia ?? "—"}
-        </div>
+        <div className="text-xs font-medium text-muted-foreground">DNI {cliente.dni}</div>
+        {mostrarCobrador && cliente.cobradorAsignadoNombre && (
+          <div className="mt-0.5 text-[0.68rem] text-muted-foreground">
+            {cliente.cobradorAsignadoNombre.split(" ")[0]}
+          </div>
+        )}
       </div>
     </button>
   );

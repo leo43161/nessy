@@ -1,34 +1,38 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { COBRO_STATUS, COBRO_STATUSES } from "@/lib/status";
-import type { CobroDia, CobroStatus } from "@/types";
+import { PAGO_ESTADO, PAGO_ESTADOS } from "@/lib/status";
+import type { CobroDelDia, PagoEstado } from "@/types";
 
-export type CobroFilter = CobroStatus | "all";
+export type CobroFilter = PagoEstado | "all";
 
 interface FilterPillsProps {
-  cobros: CobroDia[];
+  cobros: CobroDelDia[];
   value: CobroFilter;
   onChange: (filter: CobroFilter) => void;
 }
 
 /** Pills de filtrado por estado, con contador */
 export function FilterPills({ cobros, value, onChange }: FilterPillsProps) {
-  const count = (status: CobroStatus) => cobros.filter((c) => c.status === status).length;
+  const count = (estado: PagoEstado) => cobros.filter((c) => c.estado === estado).length;
 
   return (
     <div className="mb-3.5 flex gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none]">
-      <Pill active={value === "all"} activeClass="bg-primary text-primary-foreground" onClick={() => onChange("all")}>
+      <Pill
+        active={value === "all"}
+        activeClass="bg-primary text-primary-foreground"
+        onClick={() => onChange("all")}
+      >
         Todos ({cobros.length})
       </Pill>
-      {COBRO_STATUSES.map((status) => (
+      {PAGO_ESTADOS.map((estado) => (
         <Pill
-          key={status}
-          active={value === status}
-          activeClass={COBRO_STATUS[status].pill}
-          onClick={() => onChange(status)}
+          key={estado}
+          active={value === estado}
+          activeClass={PAGO_ESTADO[estado].pill}
+          onClick={() => onChange(estado)}
         >
-          {COBRO_STATUS[status].short} ({count(status)})
+          {PAGO_ESTADO[estado].short} ({count(estado)})
         </Pill>
       ))}
     </div>

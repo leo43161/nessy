@@ -4,6 +4,7 @@ import uiReducer from "./slices/ui.slice";
 import cobrosReducer from "./slices/cobros.slice";
 import clientesReducer from "./slices/clientes.slice";
 import notasReducer from "./slices/notas.slice";
+import estadisticasReducer from "./slices/estadisticas.slice";
 
 export function makeStore() {
   return configureStore({
@@ -13,6 +14,7 @@ export function makeStore() {
       cobros: cobrosReducer,
       clientes: clientesReducer,
       notas: notasReducer,
+      estadisticas: estadisticasReducer,
     },
   });
 }

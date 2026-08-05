@@ -18,7 +18,7 @@ export function DateHeader() {
       <div>
         <div className="font-bold">{formatDayLabel(workDate)}</div>
         <div className="text-xs text-muted-foreground">
-          Cobros programados · {formatFecha(workDate)}
+          Cobros a gestionar · {formatFecha(workDate)}
         </div>
       </div>
       <Button variant="outline" size="sm" onClick={() => setDialogOpen(true)}>

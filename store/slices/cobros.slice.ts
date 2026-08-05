@@ -1,57 +1,41 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import * as cobrosService from "@/services/cobros.service";
-import type { ActualizarCobroPayload, CobroDia, ResumenDia } from "@/types";
+import type { CobroDelDia, FiltroCobros, RegistrarPagoPayload } from "@/types";
 
 type LoadStatus = "idle" | "loading" | "succeeded" | "failed";
 
 interface CobrosState {
-  items: CobroDia[];
+  items: CobroDelDia[];
   status: LoadStatus;
   error: string | null;
-  resumen: ResumenDia | null;
-  resumenStatus: LoadStatus;
 }
 
 const initialState: CobrosState = {
   items: [],
   status: "idle",
   error: null,
-  resumen: null,
-  resumenStatus: "idle",
 };
 
-export const fetchCobros = createAsyncThunk<
-  CobroDia[],
-  { cobradorId: number; fecha: string },
-  { rejectValue: string }
->("cobros/fetch", async ({ cobradorId, fecha }, { rejectWithValue }) => {
-  try {
-    return await cobrosService.getCobrosDia(cobradorId, fecha);
-  } catch {
-    return rejectWithValue("No se pudieron cargar los cobros.");
-  }
-});
-
-export const updateCobro = createAsyncThunk<CobroDia, ActualizarCobroPayload, { rejectValue: string }>(
-  "cobros/update",
-  async (payload, { rejectWithValue }) => {
+export const fetchCobros = createAsyncThunk<CobroDelDia[], FiltroCobros, { rejectValue: string }>(
+  "cobros/fetch",
+  async (filtro, { rejectWithValue }) => {
     try {
-      return await cobrosService.actualizarCobro(payload);
+      return await cobrosService.getCobrosDia(filtro);
     } catch {
-      return rejectWithValue("No se pudo actualizar el cobro.");
+      return rejectWithValue("No se pudieron cargar los cobros.");
     }
   }
 );
 
-export const fetchResumenDia = createAsyncThunk<
-  ResumenDia,
-  { cobradorId: number; fecha: string },
+export const registrarPago = createAsyncThunk<
+  CobroDelDia,
+  RegistrarPagoPayload,
   { rejectValue: string }
->("cobros/resumen", async ({ cobradorId, fecha }, { rejectWithValue }) => {
+>("cobros/registrar", async (payload, { rejectWithValue }) => {
   try {
-    return await cobrosService.getResumenDia(cobradorId, fecha);
+    return await cobrosService.registrarPago(payload);
   } catch {
-    return rejectWithValue("No se pudo cargar el resumen.");
+    return rejectWithValue("No se pudo registrar el pago.");
   }
 });
 
@@ -73,21 +57,9 @@ const cobrosSlice = createSlice({
         state.status = "failed";
         state.error = action.payload ?? "Error al cargar cobros.";
       })
-      .addCase(updateCobro.fulfilled, (state, action) => {
+      .addCase(registrarPago.fulfilled, (state, action) => {
         const idx = state.items.findIndex((c) => c.id === action.payload.id);
         if (idx >= 0) state.items[idx] = action.payload;
-        // el resumen quedó viejo; se refresca en la próxima visita a estadísticas
-        state.resumenStatus = "idle";
-      })
-      .addCase(fetchResumenDia.pending, (state) => {
-        state.resumenStatus = "loading";
-      })
-      .addCase(fetchResumenDia.fulfilled, (state, action) => {
-        state.resumenStatus = "succeeded";
-        state.resumen = action.payload;
-      })
-      .addCase(fetchResumenDia.rejected, (state) => {
-        state.resumenStatus = "failed";
       });
   },
 });

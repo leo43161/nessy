@@ -1,14 +1,17 @@
-import type { Moneda } from "@/types";
-
 const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 const DIAS = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 
-/** "ARP 25.000,00" */
-export function fmtMoney(monto: number, moneda: Moneda = "ARP"): string {
-  return `${moneda} ${Number(monto).toLocaleString("es-AR", {
+/** "$ 25.000,00" (la DB no maneja múltiples monedas) */
+export function fmtMoney(monto: number): string {
+  return `$ ${Number(monto).toLocaleString("es-AR", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
+}
+
+/** "87%" */
+export function fmtPct(valor: number): string {
+  return `${Math.round(valor)}%`;
 }
 
 /** Iniciales para el avatar: "Ana García" → "AG" */

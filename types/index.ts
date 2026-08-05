@@ -1,91 +1,105 @@
-// ── Modelos de datos del sistema (alineados a la maqueta / futura API) ──
+// ════════════════════════════════════════════════════════════════
+//  Modelos de datos alineados al esquema real de la DB (SQL_21-7)
+//  Tablas: Clientes, Referentes, Cobradores, Telefonos, Notas,
+//  Cuenta/Roles, Localidades_y_regiones, Cuenta_Corriente,
+//  Plan_de_pagos, Pagos_por_realizar, Pagos_realizados,
+//  Advertencias_y_retrasos
+// ════════════════════════════════════════════════════════════════
 
-export type Moneda = "ARP" | "USD";
+/** Estado de un pago por realizar (Pagos_por_realizar.Estado).
+ *  "Vencido" no se guarda: se deriva (Pendiente con fecha pasada). */
+export type PagoEstado = "Pendiente" | "Pagado" | "Incomunicado" | "Adelanto" | "Recargo";
 
-export type ClienteEstatus = "Activo" | "Inactivo" | "Moroso";
+/** Plan_de_pagos.Status */
+export type PlanStatus = "Activo" | "Completado" | "Incumplido" | "Refinanciado";
 
-export type Frecuencia =
-  | "Diaria"
-  | "Semanal"
-  | "Quincenal"
-  | "Mensual"
-  | "Pago Único";
+export type ClienteStatus = "Activo" | "Inactivo" | "Moroso";
 
-/** Estado de un cobro puntual del día */
-export type CobroStatus = "Paid" | "Pending" | "Overdue" | "Unreachable";
-
-/** Estado de un esquema de pago (financiación) */
-export type ScheduleStatus = "Active" | "Completed" | "Defaulted" | "Refinanced";
-
-export type TransaccionTipo = "CARGO" | "PAGO";
-
-export interface Cobrador {
+export interface Localidad {
   id: number;
   nombre: string;
-  telefono?: string;
 }
 
-export interface Cliente {
+/** Campos compartidos por Clientes / Referentes / Cobradores en la DB */
+export interface PersonaBase {
   id: number;
-  nombre: string;
-  telefono: string;
-  moneda: Moneda;
-  estatus: ClienteEstatus;
-  creado: string; // YYYY-MM-DD
+  dni: string;
+  nombreCompleto: string;
+  email: string | null;
+  codigoPostal: string | null;
+  direccion: string | null;
+  casaODeptoDirecc1: string | null;
+  direccionLaboralOAlternativa: string | null;
+  casaODeptoDirecc2: string | null;
+  img: string | null;
+  fechaDeNacimiento: string | null; // YYYY-MM-DD
+  idLocalidad: number | null;
 }
 
-/** Esquema de pago acordado con el cliente (financiación) */
-export interface PaymentSchedule {
-  id: number;
-  clienteId: number;
-  cobradorId: number;
-  pagoAcordado: number;
-  frecuencia: Frecuencia;
-  status: ScheduleStatus;
-  active: boolean;
+export interface Cliente extends PersonaBase {
+  /** ubicacion_geografica_de_destino_de_cobro */
+  ubicacionCobro: string | null;
+  status: ClienteStatus;
 }
 
-/** Cobro programado para un día concreto, ya "joineado" con su cliente */
-export interface CobroDia {
-  id: number;
-  scheduleId: number;
-  fecha: string; // YYYY-MM-DD
-  monto: number;
-  status: CobroStatus;
-  frecuencia: Frecuencia;
-  /** Caso especial: otro cobrador realizó el cobro */
-  scCobradorId: number | null;
-  scNotas: string | null;
-  cliente: Cliente;
-}
+export type Referente = PersonaBase;
 
-export interface Transaccion {
+export type Cobrador = PersonaBase;
+
+/** Telefonos es polimórfica (id_tabla + id_entidad): una entidad tiene N teléfonos */
+export interface Telefono {
   id: number;
-  clienteId: number;
-  cobroId: number | null;
-  tipo: TransaccionTipo;
-  concepto: string;
-  monto: number;
-  fecha: string; // YYYY-MM-DD
+  numero: string;
 }
 
 export interface Nota {
   id: number;
-  clienteId: number;
-  clienteNombre: string;
-  contenido: string;
-  fecha: string; // YYYY-MM-DD
+  idCliente: number;
+  nota: string;
+  fechaDeCreacion: string; // YYYY-MM-DD
+  fechaUltimaEdicion: string | null;
 }
 
-/** Cliente con el resumen que se muestra en la lista / balance */
-export interface ClienteResumen extends Cliente {
-  pagoAcordado: number | null;
-  frecuencia: Frecuencia | null;
-  cobradorNombre: string | null;
-  totalCobrado: number;
+export interface CuentaCorriente {
+  id: number;
+  idCliente: number;
+  fechaDeCreacion: string;
 }
 
-// ── Payloads hacia la API ──
+export interface PlanDePagos {
+  id: number;
+  idCuentaCorriente: number;
+  nombre: string;
+  montoTotal: number;
+  status: PlanStatus;
+}
+
+export interface PagoPorRealizar {
+  id: number;
+  idPlanDePago: number;
+  fechaAcordada: string; // YYYY-MM-DD
+  montoEsperado: number;
+  /** false → el admin lo ve como cobro fuera de rango */
+  dentroRango: boolean | null;
+  estado: PagoEstado;
+}
+
+export interface PagoRealizado {
+  id: number;
+  idPago: number;
+  /** Quién cobró realmente (≠ asignado ⇒ asistencia) */
+  idCobrador: number;
+  concepto: string;
+  fechaDePago: string;
+}
+
+// ── Auth (tablas Cuenta / Roles / Cuenta_Cobrador) ──
+
+export interface Cuenta {
+  id: number;
+  nombreDeUsuario: string;
+  rol: string;
+}
 
 export interface LoginPayload {
   usuario: string;
@@ -94,39 +108,150 @@ export interface LoginPayload {
 
 export interface LoginResponse {
   token: string;
-  usuario: Cobrador;
+  cuenta: Cuenta;
+  cobrador: Cobrador;
 }
 
-export interface ActualizarCobroPayload {
+// ── View models (lo que arman los SP / endpoints para la UI) ──
+
+/** Cobro del día: pago por realizar + plan + cliente + cobrador asignado */
+export interface CobroDelDia {
+  id: number; // id del pago por realizar
+  planId: number;
+  planNombre: string;
+  fechaAcordada: string;
+  montoEsperado: number;
+  estado: PagoEstado;
+  dentroRango: boolean | null;
+  cobradorAsignadoId: number;
+  cobradorAsignadoNombre: string;
+  /** Quién lo cobró, si ya se registró (≠ asignado ⇒ asistencia) */
+  cobradoPorId: number | null;
+  cobradoPorNombre: string | null;
+  cliente: ClienteListado;
+}
+
+/** Cliente resumido para listados */
+export interface ClienteListado {
   id: number;
-  status: CobroStatus;
-  scCobradorId?: number | null;
-  scNotas?: string | null;
+  dni: string;
+  nombreCompleto: string;
+  status: ClienteStatus;
+  direccion: string | null;
+  ubicacionCobro: string | null;
+  idLocalidad: number | null;
+  localidadNombre: string | null;
+  telefonos: Telefono[];
+  cobradorAsignadoId: number | null;
+  cobradorAsignadoNombre: string | null;
 }
 
-export interface NuevoClientePayload {
+/** Referente de un cliente: puede ser de la tabla Referentes o un cliente-referente */
+export interface ReferenteDeCliente {
+  tipo: "Referente" | "Cliente";
+  id: number;
+  dni: string;
+  nombreCompleto: string;
+  direccion: string | null;
+  localidadNombre: string | null;
+  telefonos: Telefono[];
+}
+
+/** Detalle completo para el modal de cliente */
+export interface ClienteDetalle {
+  cliente: Cliente;
+  localidadNombre: string | null;
+  telefonos: Telefono[];
+  cobradorAsignadoNombre: string | null;
+  referentes: ReferenteDeCliente[];
+  notas: Nota[];
+  estadoDeCuenta: EstadoDeCuenta;
+}
+
+/** Estado de cuenta del cliente (para mostrar y compartir) */
+export interface EstadoDeCuenta {
+  clienteId: number;
+  clienteNombre: string;
+  generadoEl: string;
+  planes: EstadoDeCuentaPlan[];
+  totalPagado: number;
+  saldoPendiente: number;
+  totalVencido: number;
+}
+
+export interface EstadoDeCuentaPlan {
+  planId: number;
   nombre: string;
-  telefono: string;
-  moneda: Moneda;
-  estatus: ClienteEstatus;
+  status: PlanStatus;
+  montoTotal: number;
+  cuotasTotales: number;
+  cuotasPagadas: number;
+  pagado: number;
+  pendiente: number;
+  vencido: number;
+  proximaCuota: { fecha: string; monto: number } | null;
+  /** Últimos movimientos del plan (cuotas con estado registrado) */
+  movimientos: EstadoDeCuentaMovimiento[];
+}
+
+export interface EstadoDeCuentaMovimiento {
+  fecha: string;
+  concepto: string;
+  monto: number;
+  estado: PagoEstado;
+}
+
+// ── Estadísticas ──
+
+export interface RankingCobrador {
+  cobradorId: number;
+  nombre: string;
+  /** % de cobros del día efectivamente cobrados */
+  efectividad: number;
+  /** Dinero cobrado en el día */
+  montoCobrado: number;
+  puesto: number;
+}
+
+export interface EstadisticasCobrador {
+  ranking: RankingCobrador[];
+  miPuesto: number;
+  totalCobradores: number;
+  /** % debajo del mejor (0 si soy el mejor) */
+  brechaConElMejor: number;
+  /** % de efectividad de cobro (pagados / total) */
+  efectividadPersonal: number;
+  /** % de completitud (gestionados / total, cualquier estado ≠ Pendiente) */
+  completitud: number;
+  /** Veces que otro cobrador cubrió mis cobros en los últimos 6 meses (más = peor) */
+  asistencias6Meses: number;
+  /** Promedio de dinero por día */
+  promedioDiario: number;
+  /** Dinero perdido: cuotas vencidas + incomunicados sin cobrar */
+  dineroPerdido: number;
+}
+
+// ── Payloads hacia la API ──
+
+export interface RegistrarPagoPayload {
+  pagoId: number;
+  estado: Exclude<PagoEstado, "Pendiente">;
+  concepto?: string;
+  /** Cobrador que registra (para asistencias) */
   cobradorId: number;
 }
 
-export interface NuevoCargoPayload {
-  clienteId: number;
-  concepto: string;
-  monto: number;
-  anticipo: number;
-  /** true = se salda al momento, sin esquema de cuotas */
-  pagoContado: boolean;
-  pagoAcordado?: number;
-  esquema?: Frecuencia;
+export interface FiltroCobros {
+  fecha: string;
+  /** null → cobros de TODOS los cobradores (modo asistencia) */
+  cobradorId: number | null;
+  localidadId: number | null;
 }
 
-export interface NuevoPagoPayload {
-  clienteId: number;
-  concepto: string;
-  monto: number;
+export interface FiltroClientes {
+  /** null → todos los clientes */
+  cobradorId: number | null;
+  localidadId: number | null;
 }
 
 export interface NuevaNotaPayload {
@@ -134,13 +259,7 @@ export interface NuevaNotaPayload {
   contenido: string;
 }
 
-/** Resumen del día para el dashboard de estadísticas */
-export interface ResumenDia {
-  totalCobros: number;
-  cobrados: number;
-  pendientes: number;
-  vencidos: number;
-  ilocalizables: number;
-  montoCobrado: number;
-  totalTransacciones: number;
+export interface EditarNotaPayload {
+  notaId: number;
+  contenido: string;
 }

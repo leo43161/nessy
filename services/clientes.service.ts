@@ -1,149 +1,103 @@
 import { api, USE_MOCK } from "@/services/api";
-import { COBRADORES, delay, getDb, nextId, saveDb } from "@/services/mock/db";
-import { todayISO } from "@/lib/format";
+import {
+  buildEstadoDeCuenta,
+  delay,
+  getDb,
+  getLocalidadNombre,
+  getTelefonos,
+  toClienteListado,
+} from "@/services/mock/db";
 import type {
-  Cliente,
-  ClienteResumen,
-  NuevoCargoPayload,
-  NuevoClientePayload,
-  NuevoPagoPayload,
-  Transaccion,
+  ClienteDetalle,
+  ClienteListado,
+  EstadoDeCuenta,
+  FiltroClientes,
+  ReferenteDeCliente,
 } from "@/types";
 
-function toResumen(cliente: Cliente, cobradorId?: number): ClienteResumen {
-  const db = getDb();
-  const sched = db.schedules.find(
-    (s) =>
-      s.clienteId === cliente.id &&
-      s.active &&
-      (cobradorId === undefined || s.cobradorId === cobradorId)
-  );
-  const cobrador = sched ? COBRADORES.find((c) => c.id === sched.cobradorId) : null;
-  return {
-    ...cliente,
-    pagoAcordado: sched?.pagoAcordado ?? null,
-    frecuencia: sched?.frecuencia ?? null,
-    cobradorNombre: cobrador?.nombre ?? null,
-    totalCobrado: db.transacciones
-      .filter((t) => t.clienteId === cliente.id && t.tipo === "PAGO")
-      .reduce((sum, t) => sum + t.monto, 0),
-  };
-}
-
-/** Clientes asignados a un cobrador, con su resumen de saldo */
-export async function getClientes(cobradorId: number): Promise<ClienteResumen[]> {
+/** Clientes según filtros (cobrador null = todos) */
+export async function getClientes(filtro: FiltroClientes): Promise<ClienteListado[]> {
   if (USE_MOCK) {
     const db = getDb();
-    const misClientes = new Set(
-      db.schedules.filter((s) => s.cobradorId === cobradorId && s.active).map((s) => s.clienteId)
-    );
     const clientes = db.clientes
-      .filter((c) => misClientes.has(c.id))
-      .map((c) => toResumen(c, cobradorId));
+      .filter((c) => {
+        if (filtro.cobradorId == null) return true;
+        return db.clienteCobrador.some(
+          (cc) => cc.idCliente === c.id && cc.idCobrador === filtro.cobradorId
+        );
+      })
+      .filter((c) => (filtro.localidadId == null ? true : c.idLocalidad === filtro.localidadId))
+      .map((c) => toClienteListado(db, c));
     return delay(clientes);
   }
-  const { data } = await api.get<ClienteResumen[]>("/clientes", { params: { cobradorId } });
+  const { data } = await api.get<ClienteListado[]>("/clientes", { params: filtro });
   return data;
 }
 
-/** Detalle de un cliente para el modal de balance */
-export async function getCliente(clienteId: number): Promise<ClienteResumen> {
+/** Referentes del cliente: de la tabla Referentes + clientes que lo referencian */
+function getReferentesDeCliente(clienteId: number): ReferenteDeCliente[] {
+  const db = getDb();
+  const desdeTabla: ReferenteDeCliente[] = db.referenteCliente
+    .filter((rc) => rc.idCliente === clienteId)
+    .map((rc) => db.referentes.find((r) => r.id === rc.idReferente))
+    .filter((r): r is NonNullable<typeof r> => Boolean(r))
+    .map((r) => ({
+      tipo: "Referente",
+      id: r.id,
+      dni: r.dni,
+      nombreCompleto: r.nombreCompleto,
+      direccion: r.direccion,
+      localidadNombre: getLocalidadNombre(db, r.idLocalidad),
+      telefonos: getTelefonos(db, "Referentes", r.id),
+    }));
+
+  const desdeClientes: ReferenteDeCliente[] = db.clienteClienteReferente
+    .filter((cr) => cr.idTitular === clienteId)
+    .map((cr) => db.clientes.find((c) => c.id === cr.idReferente))
+    .filter((c): c is NonNullable<typeof c> => Boolean(c))
+    .map((c) => ({
+      tipo: "Cliente",
+      id: c.id,
+      dni: c.dni,
+      nombreCompleto: c.nombreCompleto,
+      direccion: c.direccion,
+      localidadNombre: getLocalidadNombre(db, c.idLocalidad),
+      telefonos: getTelefonos(db, "Clientes", c.id),
+    }));
+
+  return [...desdeTabla, ...desdeClientes];
+}
+
+/** Detalle completo para el modal de cliente */
+export async function getClienteDetalle(clienteId: number): Promise<ClienteDetalle> {
   if (USE_MOCK) {
     const db = getDb();
     const cliente = db.clientes.find((c) => c.id === clienteId);
     if (!cliente) throw new Error("Cliente no encontrado.");
-    return delay(toResumen(cliente), 150);
-  }
-  const { data } = await api.get<ClienteResumen>(`/clientes/${clienteId}`);
-  return data;
-}
-
-/** Historial de transacciones (más recientes primero) */
-export async function getTransacciones(clienteId: number): Promise<Transaccion[]> {
-  if (USE_MOCK) {
-    const db = getDb();
-    const txs = db.transacciones
-      .filter((t) => t.clienteId === clienteId)
-      .slice()
-      .sort((a, b) => b.fecha.localeCompare(a.fecha) || b.id - a.id);
-    return delay(txs, 250);
-  }
-  const { data } = await api.get<Transaccion[]>(`/clientes/${clienteId}/transacciones`);
-  return data;
-}
-
-export async function crearCliente(payload: NuevoClientePayload): Promise<ClienteResumen> {
-  if (USE_MOCK) {
-    const db = getDb();
-    const cliente: Cliente = {
-      id: nextId(db.clientes),
-      nombre: payload.nombre,
-      telefono: payload.telefono,
-      moneda: payload.moneda,
-      estatus: payload.estatus,
-      creado: todayISO(),
+    const cobrador = db.clienteCobrador.find((cc) => cc.idCliente === clienteId);
+    const detalle: ClienteDetalle = {
+      cliente,
+      localidadNombre: getLocalidadNombre(db, cliente.idLocalidad),
+      telefonos: getTelefonos(db, "Clientes", clienteId),
+      cobradorAsignadoNombre:
+        db.cobradores.find((c) => c.id === cobrador?.idCobrador)?.nombreCompleto ?? null,
+      referentes: getReferentesDeCliente(clienteId),
+      notas: db.notas
+        .filter((n) => n.idCliente === clienteId)
+        .sort((a, b) => b.fechaDeCreacion.localeCompare(a.fechaDeCreacion) || b.id - a.id),
+      estadoDeCuenta: buildEstadoDeCuenta(db, clienteId),
     };
-    db.clientes.push(cliente);
-    db.schedules.push({
-      id: nextId(db.schedules),
-      clienteId: cliente.id,
-      cobradorId: payload.cobradorId,
-      pagoAcordado: 0,
-      frecuencia: "Diaria",
-      status: "Active",
-      active: true,
-    });
-    saveDb();
-    return delay(toResumen(cliente, payload.cobradorId));
+    return delay(detalle, 250);
   }
-  const { data } = await api.post<ClienteResumen>("/clientes", payload);
+  const { data } = await api.get<ClienteDetalle>(`/clientes/${clienteId}`);
   return data;
 }
 
-/** Carga más financiación: registra el cargo y actualiza el esquema de pago */
-export async function crearCargo(payload: NuevoCargoPayload): Promise<Transaccion> {
+/** Estado de cuenta del cliente (para compartir tras cobrar) */
+export async function getEstadoDeCuenta(clienteId: number): Promise<EstadoDeCuenta> {
   if (USE_MOCK) {
-    const db = getDb();
-    const tx: Transaccion = {
-      id: nextId(db.transacciones),
-      clienteId: payload.clienteId,
-      cobroId: null,
-      tipo: "CARGO",
-      concepto: payload.concepto || "Cargo",
-      monto: payload.monto,
-      fecha: todayISO(),
-    };
-    db.transacciones.push(tx);
-    if (!payload.pagoContado && payload.pagoAcordado && payload.esquema) {
-      const sched = db.schedules.find((s) => s.clienteId === payload.clienteId && s.active);
-      if (sched) {
-        sched.pagoAcordado = payload.pagoAcordado;
-        sched.frecuencia = payload.esquema;
-      }
-    }
-    saveDb();
-    return delay(tx);
+    return delay(buildEstadoDeCuenta(getDb(), clienteId), 200);
   }
-  const { data } = await api.post<Transaccion>("/cargos", payload);
-  return data;
-}
-
-export async function crearPago(payload: NuevoPagoPayload): Promise<Transaccion> {
-  if (USE_MOCK) {
-    const db = getDb();
-    const tx: Transaccion = {
-      id: nextId(db.transacciones),
-      clienteId: payload.clienteId,
-      cobroId: null,
-      tipo: "PAGO",
-      concepto: payload.concepto || "Pago",
-      monto: payload.monto,
-      fecha: todayISO(),
-    };
-    db.transacciones.push(tx);
-    saveDb();
-    return delay(tx);
-  }
-  const { data } = await api.post<Transaccion>("/pagos", payload);
+  const { data } = await api.get<EstadoDeCuenta>(`/clientes/${clienteId}/estado-de-cuenta`);
   return data;
 }

@@ -21,8 +21,9 @@ import { APP_NAME } from "@/lib/constants";
 export function Navbar() {
   const router = useRouter();
   const dispatch = useAppDispatch();
-  const usuario = useAppSelector((s) => s.auth.usuario);
+  const cobrador = useAppSelector((s) => s.auth.cobrador);
   const workDate = useAppSelector((s) => s.ui.workDate);
+  const primerNombre = cobrador?.nombreCompleto.split(" ")[0] ?? "Cobrador";
 
   const handleLogout = () => {
     dispatch(logout());
@@ -51,12 +52,12 @@ export function Navbar() {
               className="rounded-full border-orange-200 bg-orange-50 font-bold text-orange-700 hover:bg-orange-100 hover:text-orange-800 dark:border-orange-900 dark:bg-orange-950/60 dark:text-orange-300 dark:hover:bg-orange-950"
             >
               <User />
-              {usuario?.nombre ?? "Cobrador"}
+              {primerNombre}
               <ChevronDown />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuLabel>Cobrador: {usuario?.nombre}</DropdownMenuLabel>
+            <DropdownMenuLabel>{cobrador?.nombreCompleto ?? "Cobrador"}</DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem variant="destructive" onClick={handleLogout}>
               <LogOut />

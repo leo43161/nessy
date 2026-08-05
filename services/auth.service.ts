@@ -1,5 +1,5 @@
 import { api, USE_MOCK } from "@/services/api";
-import { COBRADORES, delay } from "@/services/mock/db";
+import { delay, getDb } from "@/services/mock/db";
 import { isTokenExpired } from "@/lib/session";
 import type { LoginPayload, LoginResponse } from "@/types";
 
@@ -13,14 +13,25 @@ function buildMockJwt(sub: number, name: string): string {
 
 export async function login(payload: LoginPayload): Promise<LoginResponse> {
   if (USE_MOCK) {
-    const usuario = COBRADORES.find(
-      (c) => c.nombre.toLowerCase() === payload.usuario.trim().toLowerCase()
+    const db = getDb();
+    const cuentaRow = db.cuentas.find(
+      (c) => c.nombreDeUsuario.toLowerCase() === payload.usuario.trim().toLowerCase()
     );
-    if (!usuario || !payload.password) {
+    const cobrador = cuentaRow
+      ? db.cobradores.find((c) => c.id === cuentaRow.idCobrador)
+      : undefined;
+    if (!cuentaRow || !cobrador || !payload.password) {
       await delay(null, 500);
       throw new Error("Usuario o contraseña incorrectos.");
     }
-    return delay({ token: buildMockJwt(usuario.id, usuario.nombre), usuario }, 500);
+    return delay(
+      {
+        token: buildMockJwt(cobrador.id, cobrador.nombreCompleto),
+        cuenta: { id: cuentaRow.id, nombreDeUsuario: cuentaRow.nombreDeUsuario, rol: cuentaRow.rol },
+        cobrador,
+      },
+      500
+    );
   }
   const { data } = await api.post<LoginResponse>("/auth/login", payload);
   return data;
