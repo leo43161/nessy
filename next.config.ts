@@ -1,6 +1,20 @@
 import type { NextConfig } from "next";
 
+/**
+ * Carpeta del dominio donde se sirve la app: "/nessy" en producción.
+ *
+ * Sin esto, el HTML del export referencia los assets como `/_next/...`, o sea
+ * desde la RAÍZ del dominio, y servido en una subcarpeta apunta al proyecto
+ * equivocado: la página carga en blanco.
+ *
+ * Sale de una variable de entorno para que `npm run dev` siga en la raíz de
+ * localhost.
+ */
+const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+
 const nextConfig: NextConfig = {
+  basePath,
+  assetPrefix: basePath || undefined,
   // Sin esto Next sube por el árbol buscando lockfiles y termina eligiendo
   // el de C:\Users\Usuario como raíz del workspace.
   turbopack: { root: __dirname },

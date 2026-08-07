@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { AlertTriangle, Loader2, Phone, ReceiptText, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -54,20 +54,31 @@ export function RegistroDialog({ cobro, open, onOpenChange, onVerCliente }: Regi
   const [registrando, setRegistrando] = useState(false);
   const [estadoCuentaOpen, setEstadoCuentaOpen] = useState(false);
   const [advertenciaOpen, setAdvertenciaOpen] = useState(false);
-  const [monto, setMonto] = useState("");
-  const [idMetodo, setIdMetodo] = useState(0);
   const [nuevaFecha, setNuevaFecha] = useState("");
   const [motivo, setMotivo] = useState(MOTIVOS_ADVERTENCIA[0]);
 
-  // Al abrir sobre otra cuota, el monto arranca en lo esperado: el caso normal
-  // es cobrar justo, y así el cobrador confirma en vez de tipear.
-  useEffect(() => {
-    if (open && cobro) setMonto(String(cobro.montoEsperado));
-  }, [open, cobro]);
+  // El monto y el método se DERIVAN mientras el cobrador no los toque, en vez
+  // de sincronizarse con un efecto: null significa "todavía no lo cambió".
+  //
+  // Así el monto arranca solo en lo esperado (el caso normal es cobrar justo,
+  // y conviene que confirme en vez de tipear) y el método en el primero de la
+  // lista, sin re-renders en cascada ni un estado que puede quedar viejo si
+  // cambia la cuota.
+  const [montoEditado, setMontoEditado] = useState<string | null>(null);
+  const [metodoElegido, setMetodoElegido] = useState<number | null>(null);
 
-  useEffect(() => {
-    if (idMetodo === 0 && metodos.length > 0) setIdMetodo(metodos[0].id);
-  }, [metodos, idMetodo]);
+  const monto = montoEditado ?? String(cobro?.montoEsperado ?? "");
+  const idMetodo = metodoElegido ?? metodos[0]?.id ?? 0;
+
+  /** Al cerrar se olvida lo tipeado: el próximo cobro arranca limpio. */
+  const cerrar = (abierto: boolean) => {
+    if (!abierto) {
+      setMontoEditado(null);
+      setMetodoElegido(null);
+      setNuevaFecha("");
+    }
+    onOpenChange(abierto);
+  };
 
   if (!cobro || !cobrador) return null;
 
@@ -136,7 +147,7 @@ export function RegistroDialog({ cobro, open, onOpenChange, onVerCliente }: Regi
 
   return (
     <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
+      <Dialog open={open} onOpenChange={cerrar}>
         <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-center">Registrar Cobro</DialogTitle>
@@ -199,7 +210,7 @@ export function RegistroDialog({ cobro, open, onOpenChange, onVerCliente }: Regi
                   min={0}
                   step="0.01"
                   value={monto}
-                  onChange={(e) => setMonto(e.target.value)}
+                  onChange={(e) => setMontoEditado(e.target.value)}
                   disabled={registrando}
                 />
                 {/* El tipo no se elige: lo deduce la API del monto. Se muestra
@@ -217,7 +228,7 @@ export function RegistroDialog({ cobro, open, onOpenChange, onVerCliente }: Regi
                 <select
                   id="metodo"
                   value={idMetodo}
-                  onChange={(e) => setIdMetodo(Number(e.target.value))}
+                  onChange={(e) => setMetodoElegido(Number(e.target.value))}
                   disabled={registrando || metodos.length === 0}
                   className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs disabled:opacity-50"
                 >
@@ -289,7 +300,7 @@ export function RegistroDialog({ cobro, open, onOpenChange, onVerCliente }: Regi
               <ReceiptText />
               Estado de cuenta
             </Button>
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
+            <Button variant="outline" onClick={() => cerrar(false)}>
               Cerrar
             </Button>
           </DialogFooter>

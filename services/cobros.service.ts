@@ -1,14 +1,4 @@
-import { api, USE_MOCK } from "@/services/api";
-import {
-  VENTANA_FUTURO,
-  VENTANA_PASADO,
-  cobrosDeLaVentana,
-  delay,
-  getDb,
-  nextId,
-  saveDb,
-  toCobroDelDia,
-} from "@/services/mock/db";
+import { api } from "@/services/api";
 import {
   aClienteListado,
   aCuota,
@@ -16,8 +6,8 @@ import {
   type FilaCuota,
   type FilaPersona,
 } from "@/services/mapear";
-import { addDays, todayISO } from "@/lib/format";
-import { CONCEPTO_POR_TIPO, tipoDeCobro } from "@/lib/status";
+import { addDays } from "@/lib/format";
+import { VENTANA_FUTURO, VENTANA_PASADO } from "@/lib/constants";
 import type {
   ClienteListado,
   CobroDelDia,
@@ -31,15 +21,6 @@ import type {
  * alrededor de esa fecha). cobrador null = todos (modo asistencia).
  */
 export async function getCobrosDia(filtro: FiltroCobros): Promise<CobroDelDia[]> {
-  if (USE_MOCK) {
-    const db = getDb();
-    const cobros = cobrosDeLaVentana(db, filtro.fecha)
-      .filter((c) => (filtro.cobradorId == null ? true : c.cobradorAsignadoId === filtro.cobradorId))
-      .filter((c) =>
-        filtro.localidadId == null ? true : c.cliente.idLocalidad === filtro.localidadId
-      );
-    return delay(cobros);
-  }
   // OJO: no es `/cobros`. Ese endpoint devuelve los cobros ya *hechos*
   // (Pagos_realizados); el worklist necesita las cuotas *a cobrar*, que es
   // `/cuotas` sobre Pagos_por_realizar.
@@ -71,12 +52,6 @@ export async function getCobrosDia(filtro: FiltroCobros): Promise<CobroDelDia[]>
  * hoy..hoy y devuelve vacío. Por eso el rango tope.
  */
 export async function getHistorico(): Promise<CobroDelDia[]> {
-  if (USE_MOCK) {
-    const db = getDb();
-    return delay(
-      db.pagosPorRealizar.map((pp) => toCobroDelDia(db, pp)).filter((c): c is CobroDelDia => !!c),
-    );
-  }
   const [res, ctx] = await Promise.all([
     api.get<{ total: number; cuotas: FilaCuota[] }>("/cuotas", {
       params: { desde: "2000-01-01", hasta: "2099-12-31" },
@@ -119,45 +94,6 @@ async function cargarContexto(): Promise<{
  * se ve en el monto abonado, no en el estado (decisión N.4).
  */
 export async function registrarPago(payload: RegistrarPagoPayload): Promise<CobroDelDia> {
-  if (USE_MOCK) {
-    const db = getDb();
-    const pp = db.pagosPorRealizar.find((p) => p.id === payload.pagoId);
-    if (!pp) throw new Error("Pago no encontrado.");
-
-    const tipo = tipoDeCobro(payload.monto, pp.montoEsperado);
-
-    pp.estado = "Pagado";
-    // El mock no tiene el domicilio del cliente para medir los 2 km, así que
-    // se aproxima con "vino con ubicación". La cuenta real la hace el SP.
-    pp.dentroRango = payload.lat != null && payload.lon != null;
-
-    // El cobro parcial cobra lo que entró y deja una cuota nueva por la
-    // diferencia, con la fecha pactada. Es lo que hace sp_PagoParcial.
-    if (tipo === "parcial" && payload.nuevaFecha) {
-      db.pagosPorRealizar.push({
-        ...pp,
-        id: nextId(db.pagosPorRealizar),
-        montoEsperado: pp.montoEsperado - payload.monto,
-        fechaAcordada: payload.nuevaFecha,
-        estado: "Pendiente",
-        dentroRango: null,
-      });
-    }
-
-    db.pagosRealizados = db.pagosRealizados.filter((pr) => pr.idPago !== pp.id);
-    db.pagosRealizados.push({
-      id: nextId(db.pagosRealizados),
-      idPago: pp.id,
-      idCobrador: payload.cobradorId,
-      concepto: payload.concepto || CONCEPTO_POR_TIPO[tipo],
-      fechaDePago: todayISO(),
-    });
-
-    saveDb();
-    const actualizado = toCobroDelDia(db, pp);
-    if (!actualizado) throw new Error("Cobro inconsistente.");
-    return delay(actualizado);
-  }
   // Un solo POST para los tres SP de cobro: el tipo lo deduce la API del
   // monto (igual / menor / mayor al esperado), así el front no puede elegir
   // mal. El id de la cuota va en el body: este router no tiene path params.
@@ -198,10 +134,6 @@ export async function registrarPago(payload: RegistrarPagoPayload): Promise<Cobr
 export async function registrarAdvertencia(
   payload: RegistrarAdvertenciaPayload,
 ): Promise<void> {
-  if (USE_MOCK) {
-    await delay(null, 300);
-    return;
-  }
   await api.post("/advertencias", {
     id_plan: payload.planId,
     Motivo: payload.motivo,

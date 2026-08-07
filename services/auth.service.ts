@@ -1,6 +1,4 @@
-import { api, USE_MOCK } from "@/services/api";
-import { delay, getDb } from "@/services/mock/db";
-import { isTokenExpired } from "@/lib/session";
+import { api } from "@/services/api";
 import { aCobrador, type FilaPersona } from "@/services/mapear";
 import type { Cobrador, LoginPayload, LoginResponse } from "@/types";
 
@@ -13,36 +11,7 @@ interface DatosToken {
   id_Cobrador: number | null;
 }
 
-/** JWT de utilería para el mock (la API real firma el suyo) */
-function buildMockJwt(sub: number, name: string): string {
-  const b64 = (obj: object) => btoa(JSON.stringify(obj)).replace(/=+$/, "");
-  const header = b64({ alg: "HS256", typ: "JWT" });
-  const payload = b64({ sub, name, exp: Math.floor(Date.now() / 1000) + 60 * 60 * 8 });
-  return `${header}.${payload}.mock-signature`;
-}
-
 export async function login(payload: LoginPayload): Promise<LoginResponse> {
-  if (USE_MOCK) {
-    const db = getDb();
-    const cuentaRow = db.cuentas.find(
-      (c) => c.nombreDeUsuario.toLowerCase() === payload.usuario.trim().toLowerCase()
-    );
-    const cobrador = cuentaRow
-      ? db.cobradores.find((c) => c.id === cuentaRow.idCobrador)
-      : undefined;
-    if (!cuentaRow || !cobrador || !payload.password) {
-      await delay(null, 500);
-      throw new Error("Usuario o contraseña incorrectos.");
-    }
-    return delay(
-      {
-        token: buildMockJwt(cobrador.id, cobrador.nombreCompleto),
-        cuenta: { id: cuentaRow.id, nombreDeUsuario: cuentaRow.nombreDeUsuario, rol: cuentaRow.rol },
-        cobrador,
-      },
-      500
-    );
-  }
   // La API devuelve { token, expira_el, usuario: {...} } con las claves del
   // token, no el { token, cuenta, cobrador } que arma el front.
   const { data } = await api.post<{ token: string; usuario: DatosToken }>("/auth/login", payload);
@@ -88,11 +57,13 @@ async function getCobrador(idCobrador: number, token: string): Promise<Cobrador>
   return aCobrador(fila);
 }
 
-/** Valida el token contra la API (mock: chequeo local de expiración) */
-export async function validateToken(token: string): Promise<boolean> {
-  if (USE_MOCK) {
-    return delay(!isTokenExpired(token), 100);
-  }
+/**
+ * ¿La sesión sigue viva? Lo decide la API, no el front.
+ *
+ * No recibe el token: lo pone el interceptor desde localStorage. Pasarlo por
+ * parámetro sugería que viajaba en el body, y no es así.
+ */
+export async function validateToken(): Promise<boolean> {
   try {
     // No existe /auth/validate: la sesión se comprueba pidiendo /auth/yo, que
     // el middleware ya protege con el token del header.

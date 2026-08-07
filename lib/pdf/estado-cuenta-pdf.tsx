@@ -1,7 +1,6 @@
 import { Document, Page, Text, View, StyleSheet, pdf } from "@react-pdf/renderer";
 import { APP_NAME } from "@/lib/constants";
 import { fmtMoney, formatFecha } from "@/lib/format";
-import { esCobrado } from "@/lib/status";
 import type { EstadoDeCuenta, EstadoDeCuentaPlan } from "@/types";
 
 /** Datos del cliente que no vienen en EstadoDeCuenta pero sí en el encabezado */

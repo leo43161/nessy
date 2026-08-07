@@ -1,0 +1,73 @@
+name: Deploy app del cobrador (estática) a cPanel
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Node 24: `npm run check` ejecuta TypeScript directo, sin build previo.
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Chequeos de services/mapear.ts y lib/status.ts. El segundo cubre
+      # tipoDeCobro(), que decide qué stored procedure termina corriendo: un
+      # error ahí no rompe la pantalla, cobra mal.
+      - name: Run checks
+        run: npm run check
+
+      - name: Build static site
+        run: npm run build
+        env:
+          # La app se sirve en tucucompras.com.ar/nessy/, no en la raíz. Sin
+          # esto el HTML pide los assets a /_next/... (raíz del dominio), que
+          # es la carpeta de otro proyecto: la página carga en blanco.
+          NEXT_PUBLIC_BASE_PATH: /nessy
+          # .env.local está en .gitignore, así que la URL de la API tiene que
+          # venir de acá o el build falla (services/api.ts lo exige).
+          NEXT_PUBLIC_API_URL: https://tucucompras.com.ar/fv1
+
+      # Se comprime DESDE adentro de out/ para que el zip no traiga esa carpeta:
+      # al descomprimir en el servidor, el contenido tiene que quedar suelto.
+      - name: Compress build output
+        run: |
+          cd out
+          zip -r ../deploy.zip .
+
+      - name: Prepare artifact for upload
+        run: |
+          mkdir upload_dir
+          mv deploy.zip upload_dir/
+
+      - name: Deploy ZIP to cPanel
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.4
+        with:
+          server: ${{ secrets.PANEL_SERVER }}
+          username: ${{ secrets.PANEL_USERNAME }}
+          password: ${{ secrets.PANEL_PASSWORD }}
+          protocol: ftps
+          port: 21
+          security: loose # DonWeb usa certificados autofirmados en FTP
+          local-dir: ./upload_dir/
+          server-dir: /public_html/nessy/
+
+      - name: Trigger unzip on server
+        run: curl --fail "https://tucucompras.com.ar/nessy/extract.php?secret=${{ secrets.UNZIP_SECRET }}"
