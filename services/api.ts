@@ -42,6 +42,15 @@ api.interceptors.response.use(
         window.location.href = "/login";
       }
     }
+
+    // La API explica el problema; axios solo sabe el número. Se pisa el mensaje
+    // acá, una vez, para que el cobrador lea "La cuota 115 ya está pagada" en
+    // vez de "Request failed with status code 409".
+    if (axios.isAxiosError(error)) {
+      const delApi = (error.response?.data as { message?: string } | undefined)?.message;
+      if (delApi) error.message = delApi;
+    }
+
     return Promise.reject(error);
   }
 );
