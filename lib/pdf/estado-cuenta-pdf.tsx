@@ -122,6 +122,18 @@ interface Asiento {
 }
 
 function asientosDelPlan(plan: EstadoDeCuentaPlan): Asiento[] {
+  // Un extracto va del movimiento más viejo al más nuevo, y el saldo corrido
+  // solo tiene sentido en ese orden.
+  //
+  // Antes se hacía `.reverse()` dando por sentado que la API los mandaba del
+  // más nuevo al más viejo. No es así: el asiento salía al revés y el "ALTA
+  // PLAN" quedaba fechado con la ÚLTIMA cuota — una fecha futura, como si el
+  // plan hubiera empezado el día que vence lo que todavía no se pagó.
+  // Se ordena por fecha en vez de suponer.
+  const cronologico = [...plan.movimientos].sort((a, b) =>
+    (a.fecha ?? "").localeCompare(b.fecha ?? ""),
+  );
+
   const filas: Asiento[] = [
     {
       fecha: "00/00/00",
@@ -133,7 +145,7 @@ function asientosDelPlan(plan: EstadoDeCuentaPlan): Asiento[] {
       saldo: 0,
     },
     {
-      fecha: fechaCorta(plan.movimientos[plan.movimientos.length - 1]?.fecha),
+      fecha: fechaCorta(cronologico[0]?.fecha),
       concepto: `ALTA PLAN ${plan.nombre.toUpperCase()}`,
       cuota: "",
       vencimiento: "",
@@ -144,8 +156,6 @@ function asientosDelPlan(plan: EstadoDeCuentaPlan): Asiento[] {
   ];
 
   let saldo = plan.montoTotal;
-  // La API los entrega del más nuevo al más viejo; el extracto va cronológico.
-  const cronologico = [...plan.movimientos].reverse();
 
   cronologico.forEach((m, i) => {
     // Un movimiento de Recargo es un débito (una advertencia con monto), no
@@ -343,6 +353,27 @@ export function EstadoCuentaDocument({
   );
 }
 
+/**
+ * Con qué se nombra el archivo: el DNI si lo hay, y si no el nombre.
+ *
+ * El DNI es opcional en la base y hay clientes sin él, así que usarlo solo
+ * dejaba archivos "estado-cuenta--2026-08-10.pdf" — y dos clientes sin DNI
+ * pisaban el mismo archivo en la carpeta de descargas.
+ */
+function identificador(cliente: EstadoCuentaPdfCliente): string {
+  const dni = cliente.dni?.trim();
+  if (dni) return dni;
+
+  return (
+    cliente.nombreCompleto
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .replace(/[^a-zA-Z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .toLowerCase() || "cliente"
+  );
+}
+
 /** Genera el PDF y dispara la descarga en el navegador */
 export async function descargarEstadoCuentaPdf(
   ec: EstadoDeCuenta,
@@ -355,7 +386,7 @@ export async function descargarEstadoCuentaPdf(
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `estado-cuenta-${cliente.dni}-${ec.generadoEl}.pdf`;
+  a.download = `estado-cuenta-${identificador(cliente)}-${ec.generadoEl}.pdf`;
   a.click();
   URL.revokeObjectURL(url);
 }
