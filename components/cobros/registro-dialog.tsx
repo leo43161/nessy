@@ -211,6 +211,12 @@ export function RegistroDialog({ cobro, open, onOpenChange, onVerCliente }: Regi
                   step="0.01"
                   value={monto}
                   onChange={(e) => setMontoEditado(e.target.value)}
+                  // Un input number enfocado toma la rueda del mouse y suma o
+                  // resta un `step`. Scrolleando el diálogo para llegar al
+                  // botón, el importe cambiaba solo: 10.000 pasaba a 9.999,99
+                  // y el cobro se registraba por ese monto. Se le saca el foco
+                  // y la rueda vuelve a scrollear la página.
+                  onWheel={(e) => e.currentTarget.blur()}
                   disabled={registrando}
                 />
                 {/* El tipo no se elige: lo deduce la API del monto. Se muestra

@@ -97,11 +97,18 @@ export interface FilaPersona {
 }
 
 /** Fila de GET /notas */
+/**
+ * Fila de GET /notas.
+ *
+ * Los nombres son los que devuelve la API, verificados contra producción: no
+ * siguen la convención de las otras tablas (`id_Notas` en plural, `id_Cliente`
+ * con mayúscula, `fecha_de_creacion` en minúsculas).
+ */
 export interface FilaNota {
-  id_Notes: number;
-  id_cliente: number;
+  id_Notas: number;
+  id_Cliente: number;
   Nota: string | null;
-  Fecha_Creacion: string | null;
+  fecha_de_creacion: string | null;
   Fecha_UltimaEdicion?: string | null;
   cliente_nombre?: string | null;
 }
@@ -280,10 +287,10 @@ export function aReferenteDeCliente(f: FilaPersona): ReferenteDeCliente {
 
 export function aNota(f: FilaNota): Nota {
   return {
-    id: f.id_Notes,
-    idCliente: f.id_cliente,
+    id: f.id_Notas,
+    idCliente: f.id_Cliente,
     nota: f.Nota ?? "",
-    fechaDeCreacion: (f.Fecha_Creacion ?? "").slice(0, 10),
+    fechaDeCreacion: (f.fecha_de_creacion ?? "").slice(0, 10),
     fechaUltimaEdicion: f.Fecha_UltimaEdicion ? f.Fecha_UltimaEdicion.slice(0, 10) : null,
   };
 }

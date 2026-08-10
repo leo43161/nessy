@@ -79,7 +79,7 @@ export async function editarNota(payload: EditarNotaPayload): Promise<NotaConCli
   const fila = data.notas[0];
   if (!fila) throw new Error("Nota no encontrada.");
 
-  return { ...aNota(fila), clienteNombre: await nombreDeCliente(fila.id_cliente) };
+  return { ...aNota(fila), clienteNombre: await nombreDeCliente(fila.id_Cliente) };
 }
 
 export async function eliminarNota(notaId: number): Promise<number> {

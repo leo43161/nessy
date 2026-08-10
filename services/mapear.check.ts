@@ -115,13 +115,20 @@ assert.equal(cliente.localidadNombre, "San Miguel de Tucumán");
 
 assert.equal(aCobrador(FILA_COBRADOR).id, 5, "la PK es id_Cobradores, no id");
 
-const nota = aNota({
-  id_Notes: 3,
-  id_cliente: 105,
+// Sin `as FilaNota`: el cast apagaba el control de tipos y por eso pasaron
+// meses tres nombres inventados (id_Notes / id_cliente / Fecha_Creacion) que la
+// API nunca devolvió. El id quedaba undefined y editar o borrar una nota
+// fallaba; la fecha salía vacía y se veía como "—".
+const FILA_NOTA: FilaNota = {
+  id_Notas: 3,
+  id_Cliente: 105,
   Nota: "Pasar después de las 18",
-  Fecha_Creacion: "2026-08-03 12:48:05",
+  fecha_de_creacion: "2026-08-03 12:48:05",
   Fecha_UltimaEdicion: null,
-} as FilaNota);
+};
+const nota = aNota(FILA_NOTA);
+assert.equal(nota.id, 3, "la PK es id_Notas");
+assert.equal(nota.idCliente, 105, "la FK es id_Cliente");
 assert.equal(nota.fechaDeCreacion, "2026-08-03", "el datetime se recorta a fecha");
 assert.equal(nota.fechaUltimaEdicion, null);
 

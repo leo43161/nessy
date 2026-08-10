@@ -9,6 +9,7 @@ import {
   type RespuestaEstadoCuenta,
 } from "@/services/mapear";
 import { getNotasDeCliente } from "@/services/notas.service";
+import { getLocalidades } from "@/services/cobradores.service";
 import { todayISO } from "@/lib/format";
 import type {
   ClienteDetalle,
@@ -22,10 +23,25 @@ export async function getClientes(filtro: FiltroClientes): Promise<ClienteListad
   // La API ya recorta por cartera: para el rol cobrador, `/clientes` devuelve
   // solo los suyos usando el id_Cobrador del token. Los filtros de la UI no
   // los soporta todavía (tarea C.2), así que se aplican acá.
-  const { data } = await api.get<{ total: number; clientes: FilaCliente[] }>("/clientes");
+  //
+  // El catálogo va aparte porque `sp_VerCliente-Cobrador` NO devuelve
+  // `nombre_localidad` — el SP del admin sí, el del cobrador no —, así que sin
+  // esto la lista mostraba "Sin localidad" en todos. Se resuelve por id contra
+  // el catálogo, que es el mismo que alimenta el filtro de esta pantalla.
+  const [{ data }, localidades] = await Promise.all([
+    api.get<{ total: number; clientes: FilaCliente[] }>("/clientes"),
+    getLocalidades(),
+  ]);
+
+  const nombrePorId = new Map(localidades.map((l) => [l.id, l.nombre]));
 
   return data.clientes
-    .map((f) => aClienteListado(f))
+    .map((f) => {
+      const cliente = aClienteListado(f);
+      if (cliente.localidadNombre || cliente.idLocalidad == null) return cliente;
+
+      return { ...cliente, localidadNombre: nombrePorId.get(cliente.idLocalidad) ?? null };
+    })
     .filter((c) => filtro.localidadId == null || c.idLocalidad === filtro.localidadId);
 }
 
@@ -38,12 +54,15 @@ export async function getClienteDetalle(clienteId: number): Promise<ClienteDetal
   // /estado_cuenta ya devuelve cliente, teléfonos, referentes y movimientos en
   // un solo request, así que el detalle se arma casi entero desde ahí; solo la
   // localidad y las notas salen aparte.
-  const [resEstado, resCliente, notas] = await Promise.all([
+  const [resEstado, resCliente, notas, localidades] = await Promise.all([
     api.get<RespuestaEstadoCuenta>("/estado_cuenta", { params: { id_cliente: clienteId } }),
     api.get<{ total: number; clientes: FilaCliente[] }>("/clientes", {
       params: { id: clienteId },
     }),
     getNotasDeCliente(clienteId),
+    // Mismo motivo que en getClientes(): al cobrador el SP no le manda el
+    // nombre de la localidad, solo el id.
+    getLocalidades(),
   ]);
 
   const fila = resCliente.data.clientes[0];
@@ -51,7 +70,11 @@ export async function getClienteDetalle(clienteId: number): Promise<ClienteDetal
 
   return {
     cliente: aCliente(fila),
-    localidadNombre: fila.nombre_localidad ?? null,
+    localidadNombre:
+      fila.nombre_localidad ??
+      (fila.id_localidad != null
+        ? (localidades.find((l) => l.id === fila.id_localidad)?.nombre ?? null)
+        : null),
     telefonos: aTelefonos(fila.telefonos ?? resEstado.data.telefonos),
     // `/clientes` no devuelve el cobrador asignado y la cartera se pide por
     // cobrador. En esta app el cobrador logueado es el asignado salvo en modo
