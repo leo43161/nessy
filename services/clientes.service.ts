@@ -16,6 +16,8 @@ import type {
   ClienteListado,
   EstadoDeCuenta,
   FiltroClientes,
+  ReferenteDeCliente,
+  Telefono,
 } from "@/types";
 
 /** Clientes según filtros (cobrador null = todos) */
@@ -86,11 +88,25 @@ export async function getClienteDetalle(clienteId: number): Promise<ClienteDetal
   };
 }
 
-/** Estado de cuenta del cliente (para compartir tras cobrar) */
-export async function getEstadoDeCuenta(clienteId: number): Promise<EstadoDeCuenta> {
+/**
+ * Estado de cuenta del cliente (para compartir tras cobrar).
+ *
+ * Devuelve también teléfonos y referentes porque el mismo request ya los trae:
+ * cuando el cliente está incomunicado, el estado de cuenta se le manda al
+ * garante, y pedirlos aparte sería un request de más.
+ */
+export async function getEstadoDeCuenta(clienteId: number): Promise<{
+  estadoDeCuenta: EstadoDeCuenta;
+  telefonos: Telefono[];
+  referentes: ReferenteDeCliente[];
+}> {
   // El endpoint es /estado_cuenta?id_cliente=N, no una subruta de /clientes.
   const { data } = await api.get<RespuestaEstadoCuenta>("/estado_cuenta", {
     params: { id_cliente: clienteId },
   });
-  return aEstadoDeCuenta(data, todayISO());
+  return {
+    estadoDeCuenta: aEstadoDeCuenta(data, todayISO()),
+    telefonos: aTelefonos(data.telefonos),
+    referentes: data.referentes.map(aReferenteDeCliente),
+  };
 }

@@ -13,23 +13,32 @@ Sistema de cobro de financiación: informa al cobrador a quién, cuánto y dónd
 
 ```bash
 npm install
-npm run dev
+npm run dev      # puerto 5151, para poder correr junto a nessy-admin (5252)
+npm run check    # chequea services/mapear.ts y lib/status.ts
 ```
 
-Mientras la API está en desarrollo, la app usa un **backend mock** (`services/mock/db.ts`) que genera datos de demo relativos al día actual y los persiste en `localStorage`.
+**Un solo backend: la API real.** El mock que había se borró — no existe `services/mock/`
+ni se lee `USE_MOCK`.
 
-**Usuarios de demo:** `marcos`, `luis` o `diego` — cualquier contraseña.
+`.env.local`:
 
-## Conectar la API real
+```env
+NEXT_PUBLIC_API_URL=https://tucucompras.com.ar/fv1
+```
 
-1. Crear `.env.local`:
+> Sin sufijo `/api`: `api` es un controlador más de la API, por eso el ping es `/api/ping`.
 
-   ```env
-   NEXT_PUBLIC_API_URL=https://api.tudominio.com
-   NEXT_PUBLIC_USE_MOCK=false
-   ```
+### `basePath` — obligatorio para el build de producción
 
-2. Los contratos de datos esperados están en `types/index.ts` y los endpoints que consume cada servicio en `services/*.service.ts` (rama no-mock de cada función).
+La app se despliega a `/public_html/nessy/`, así que necesita
+`NEXT_PUBLIC_BASE_PATH=/nessy` al buildear. **Sin eso el HTML pide los assets a la raíz del
+dominio y la página carga en blanco.** Como queda en el mismo origen que la API, en
+producción no hay CORS de por medio.
+
+### Nombres de la base ↔ nombres de la app
+
+`services/mapear.ts` es el **único** lugar donde conviven las dos convenciones
+(`Nombre_completo` ↔ `nombreCompleto`). Tiene su chequeo en `npm run check`.
 
 ## Autenticación
 
@@ -49,31 +58,39 @@ app/
 components/
   ui/               shadcn/ui
   cobros|clientes|notas|layout|shared|providers/
-services/           Capa de API (axios) + backend mock (imita la DB real)
+services/           Capa de API (axios) + mapear.ts (traducción de nombres)
 store/              Redux Toolkit (auth, ui, cobros, clientes, notas, estadisticas)
-types/              Modelos de datos (alineados a SQL_21-7)
-lib/                Helpers (formato, sesión, estados, estado de cuenta, constantes)
+types/              Modelos de datos (alineados al dump de a0101073_finanz1)
+lib/                Helpers (formato, sesión, estados, estado de cuenta, geo, PDF)
 proxy.ts            Guard de rutas por cookie de sesión
 ```
 
 ## Modelo de datos
 
-Los tipos en `types/index.ts` reflejan el esquema real de la DB (`SQL_21-7`):
-Clientes, Referentes, Cobradores (persona base), Telefonos (polimórfica, N por entidad),
-Localidades, Cuenta/Roles, Cuenta_Corriente → Plan_de_pagos → Pagos_por_realizar /
-Pagos_realizados, Notas y Advertencias_y_retrasos.
+Los tipos en `types/index.ts` reflejan el esquema real de la DB
+(`sql/a0101073_finanz1.sql`): Clientes, Referentes, Cobradores (persona base), Telefonos
+(polimórfica, N por entidad), Localidades, Cuenta/Roles, Cuenta_Corriente → Plan_de_pagos →
+Pagos_por_realizar / Pagos_realizados, Notas y Advertencias_y_retrasos.
 
-- **Estados de pago:** `Pendiente`, `Pagado`, `Adelanto`, `Recargo`, `Incomunicado`.
-  El "Vencido" no se guarda: se deriva de un pendiente con fecha pasada.
-- **Fuera de rango:** un cobro registrado por un cobrador distinto al asignado (asistencia)
-  se marca `dentroRango = false` para que el admin lo vea.
+- **Estados de cuota:** solo `Pendiente`, `Pagado` y `Atrasado` — los de la base (decisión
+  N.4). El "Vencido" **no se guarda**: se deriva de un pendiente con fecha pasada
+  (`esVencido()` en `lib/status.ts`).
+  `Incomunicado` es una **advertencia** (`POST /advertencias`), no un estado de cuota;
+  `Adelanto` y `Recargo` se deducen del cobro y de las advertencias.
+- **`Dentro_Rango` es geográfico**, no tiene que ver con quién cobró: los SP de cobro lo
+  marcan en 1 si el cobro se hizo a **≤ 2 km del domicilio del cliente**. Por eso la app
+  manda `lat`/`lon` (`lib/geo.ts`). Si el navegador niega la ubicación el cobro **se
+  registra igual**, con `Dentro_Rango = 0` y `sin_ubicacion: true` en la respuesta.
+- **Cobro parcial y método de pago** son casos reales: el registro pide monto y
+  `id_metodo_de_pago`, y si el monto es menor al esperado la API llama a `sp_PagoParcial`,
+  que crea una cuota nueva por la diferencia.
 
 ## Funcionalidades de la vista Cobrador
 
 - **Cobros del día:** banner de ranking/desempeño (rojo si es el último), filtros por
-  localidad + buscador + "ver todos los cobradores" (modo asistencia), registro con un click
-  (pagado / adelanto / recargo / incomunicado) y envío del estado de cuenta al cliente
-  (WhatsApp / copiar / imprimir).
+  localidad + buscador + "ver todos los cobradores" (modo asistencia), registro del cobro
+  (monto + método de pago, con la ubicación adjunta) y envío del estado de cuenta al cliente
+  (WhatsApp / copiar / imprimir / PDF).
 - **Clientes:** datos personales, estado de cuenta, WhatsApp multi-teléfono (elige el número),
   referentes (cards), notas (crear / editar / eliminar).
 - **Estadísticas:** ranking de cobradores (efectividad + dinero), desempeño personal
@@ -82,4 +99,4 @@ Pagos_realizados, Notas y Advertencias_y_retrasos.
 ## Notas de diseño
 
 - La **fecha de trabajo** se elige desde el header del tab Cobros (botón "Cambiar") y persiste entre sesiones.
-- El **estado de cuenta** se genera en `lib/estado-cuenta.ts` y se comparte como texto (WhatsApp / copiar / imprimir).
+- El **estado de cuenta** se genera en `lib/estado-cuenta.ts` y se comparte como texto (WhatsApp / copiar / imprimir) o como PDF (`lib/pdf/estado-cuenta-pdf.tsx`).

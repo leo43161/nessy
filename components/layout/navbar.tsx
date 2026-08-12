@@ -11,7 +11,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { NavTabs } from "@/components/layout/nav-tabs";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { logout } from "@/store/slices/auth.slice";
@@ -65,10 +64,6 @@ export function Navbar() {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-
-        <div className="max-sm:order-last max-sm:w-full max-sm:overflow-x-auto">
-          <NavTabs />
-        </div>
       </div>
     </header>
   );

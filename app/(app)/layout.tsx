@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { Navbar } from "@/components/layout/navbar";
+import { NavTabs } from "@/components/layout/nav-tabs";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { restoreSession } from "@/store/slices/auth.slice";
 import { initWorkDate } from "@/store/slices/ui.slice";
@@ -42,7 +43,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-muted/60 dark:bg-background">
       <Navbar />
+      {/* pb-28: la barra de navegación es fija y taparía el final del listado */}
       <main className="mx-auto max-w-2xl px-3.5 pt-4 pb-28">{children}</main>
+      <NavTabs />
     </div>
   );
 }

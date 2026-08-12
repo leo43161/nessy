@@ -374,19 +374,41 @@ function identificador(cliente: EstadoCuentaPdfCliente): string {
   );
 }
 
+/**
+ * Genera el PDF como `File`.
+ *
+ * Un File y no un Blob porque `navigator.share()` solo acepta archivos: es la
+ * única vía para que el PDF entre adjunto a un chat de WhatsApp desde el
+ * navegador (un link wa.me no puede adjuntar nada).
+ */
+export async function archivoEstadoCuentaPdf(
+  ec: EstadoDeCuenta,
+  cliente: EstadoCuentaPdfCliente,
+  leyenda?: string
+): Promise<File> {
+  const blob = await pdf(
+    <EstadoCuentaDocument ec={ec} cliente={cliente} leyenda={leyenda} />
+  ).toBlob();
+  return new File([blob], `estado-cuenta-${identificador(cliente)}-${ec.generadoEl}.pdf`, {
+    type: "application/pdf",
+  });
+}
+
 /** Genera el PDF y dispara la descarga en el navegador */
 export async function descargarEstadoCuentaPdf(
   ec: EstadoDeCuenta,
   cliente: EstadoCuentaPdfCliente,
   leyenda?: string
 ): Promise<void> {
-  const blob = await pdf(
-    <EstadoCuentaDocument ec={ec} cliente={cliente} leyenda={leyenda} />
-  ).toBlob();
-  const url = URL.createObjectURL(blob);
+  descargarArchivo(await archivoEstadoCuentaPdf(ec, cliente, leyenda));
+}
+
+/** Baja un archivo ya generado, sin volver a renderizar el PDF */
+export function descargarArchivo(archivo: File): void {
+  const url = URL.createObjectURL(archivo);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `estado-cuenta-${identificador(cliente)}-${ec.generadoEl}.pdf`;
+  a.download = archivo.name;
   a.click();
   URL.revokeObjectURL(url);
 }

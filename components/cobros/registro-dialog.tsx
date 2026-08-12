@@ -22,7 +22,7 @@ import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { registrarAdvertencia, registrarPago } from "@/store/slices/cobros.slice";
 import { useMetodosDePago } from "@/hooks/use-catalogos";
 import { obtenerUbicacion } from "@/lib/geo";
-import { fmtMoney, formatFecha } from "@/lib/format";
+import { fmtMoney, formatFecha, mapaUrl } from "@/lib/format";
 import {
   esVencido,
   MOTIVOS_ADVERTENCIA,
@@ -53,6 +53,9 @@ export function RegistroDialog({ cobro, open, onOpenChange, onVerCliente }: Regi
 
   const [registrando, setRegistrando] = useState(false);
   const [estadoCuentaOpen, setEstadoCuentaOpen] = useState(false);
+  // Cerrada la visita —se cobró o quedó la advertencia— el estado de cuenta
+  // deja de ser opcional: el diálogo no se cierra hasta que lo mande.
+  const [estadoCuentaObligatorio, setEstadoCuentaObligatorio] = useState(false);
   const [advertenciaOpen, setAdvertenciaOpen] = useState(false);
   const [nuevaFecha, setNuevaFecha] = useState("");
   const [motivo, setMotivo] = useState(MOTIVOS_ADVERTENCIA[0]);
@@ -120,7 +123,8 @@ export function RegistroDialog({ cobro, open, onOpenChange, onVerCliente }: Regi
       toast.success(`${cliente.nombreCompleto}: ${fmtMoney(montoNum)} cobrados`, {
         description: ubicacion ? undefined : "Sin ubicación: quedará fuera de rango.",
       });
-      // Tras cobrar, ofrecer enviar el estado de cuenta al cliente
+      // Tras cobrar, el estado de cuenta es obligatorio: es el comprobante.
+      setEstadoCuentaObligatorio(true);
       setEstadoCuentaOpen(true);
     } else {
       toast.error(result.payload ?? "No se pudo registrar el pago.");
@@ -139,7 +143,10 @@ export function RegistroDialog({ cobro, open, onOpenChange, onVerCliente }: Regi
       // es por qué no se pudo cobrar (N.4).
       toast.success(`Advertencia registrada: ${motivo}`);
       setAdvertenciaOpen(false);
-      onOpenChange(false);
+      // Incomunicado también manda estado de cuenta: si el cliente no
+      // contesta, el destinatario puede ser el garante.
+      setEstadoCuentaObligatorio(true);
+      setEstadoCuentaOpen(true);
     } else {
       toast.error(result.payload ?? "No se pudo registrar la advertencia.");
     }
@@ -165,7 +172,23 @@ export function RegistroDialog({ cobro, open, onOpenChange, onVerCliente }: Regi
             <div className="min-w-0">
               <div className="truncate font-bold">{cliente.nombreCompleto}</div>
               <div className="text-xs text-muted-foreground">
-                {cliente.ubicacionCobro ?? cliente.direccion ?? "—"}
+                {/* ubicacionCobro son coordenadas, no una dirección: se muestra
+                    como link al mapa y el texto queda para la dirección. */}
+                {mapaUrl(cliente.ubicacionCobro) ? (
+                  <>
+                    {cliente.direccion ?? "—"}{" "}
+                    <a
+                      href={mapaUrl(cliente.ubicacionCobro)!}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline underline-offset-2"
+                    >
+                      · mapa
+                    </a>
+                  </>
+                ) : (
+                  (cliente.ubicacionCobro ?? cliente.direccion ?? "—")
+                )}
               </div>
             </div>
           </div>
@@ -302,7 +325,13 @@ export function RegistroDialog({ cobro, open, onOpenChange, onVerCliente }: Regi
           </div>
 
           <DialogFooter>
-            <Button variant="secondary" onClick={() => setEstadoCuentaOpen(true)}>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setEstadoCuentaObligatorio(false);
+                setEstadoCuentaOpen(true);
+              }}
+            >
               <ReceiptText />
               Estado de cuenta
             </Button>
@@ -362,11 +391,17 @@ export function RegistroDialog({ cobro, open, onOpenChange, onVerCliente }: Regi
           direccion: cliente.direccion,
           localidadNombre: cliente.localidadNombre,
         }}
+        obligatorio={estadoCuentaObligatorio}
         open={estadoCuentaOpen}
         onOpenChange={(o) => {
           setEstadoCuentaOpen(o);
-          // Al cerrar el estado de cuenta después de cobrar, cerramos el registro
-          if (!o) onOpenChange(false);
+          if (!o && estadoCuentaObligatorio) {
+            setEstadoCuentaObligatorio(false);
+            // La visita terminó: se cierra el registro. Vía `cerrar` y no
+            // `onOpenChange` para que se olviden el monto y la fecha tipeados,
+            // que si no aparecían prellenados en el cobro del cliente siguiente.
+            cerrar(false);
+          }
         }}
       />
     </>

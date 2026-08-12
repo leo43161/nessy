@@ -57,6 +57,21 @@ export function formatDayLabel(iso: string | null | undefined): string {
   return `${DIAS[date.getDay()]} ${date.getDate()} ${MESES[date.getMonth()]}`;
 }
 
+/**
+ * Link al mapa del punto de cobro, o null si no son coordenadas.
+ *
+ * `ubicacion_geografica_de_destino_de_cobro` guarda "lat,lon": es de ahí que
+ * los tres SPs de cobro sacan el punto para marcar `Dentro_Rango`. Mostrado
+ * crudo no le dice nada al cobrador, así que se convierte en un link. Las
+ * fichas viejas tienen texto libre en esa columna y devuelven null: se
+ * muestran tal cual.
+ */
+export function mapaUrl(ubicacion: string | null | undefined): string | null {
+  const v = ubicacion?.trim();
+  if (!v || !/^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$/.test(v)) return null;
+  return `https://www.google.com/maps?q=${encodeURIComponent(v.replace(/\s/g, ""))}`;
+}
+
 /** Link de WhatsApp con mensaje opcional prellenado */
 export function whatsappUrl(telefono: string, mensaje?: string): string {
   const nro = telefono.replace(/\D/g, "");

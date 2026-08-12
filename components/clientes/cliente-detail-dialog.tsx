@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import {
   FileText,
   MapPin,
+  MapPinned,
   Pencil,
   Phone,
   Plus,
@@ -34,13 +35,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { InitialsAvatar } from "@/components/shared/initials-avatar";
 import { WhatsappButton } from "@/components/shared/whatsapp-button";
 import { EmptyState } from "@/components/shared/empty-state";
-import { EstadoCuentaDialog } from "@/components/clientes/estado-cuenta-dialog";
+import { EstadoCuentaPanel } from "@/components/clientes/estado-cuenta-panel";
 import { ReferentesDialog } from "@/components/clientes/referentes-dialog";
 import { NotaFormDialog, type NotaFormTarget } from "@/components/notas/nota-form-dialog";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { fetchClienteDetalle } from "@/store/slices/clientes.slice";
 import { deleteNota } from "@/store/slices/notas.slice";
-import { formatFecha } from "@/lib/format";
+import { formatFecha, mapaUrl } from "@/lib/format";
 import type { Nota } from "@/types";
 
 interface ClienteDetailDialogProps {
@@ -55,7 +56,6 @@ export function ClienteDetailDialog({ clienteId, open, onOpenChange }: ClienteDe
   const { data, status } = useAppSelector((s) => s.clientes.detalle);
   const cargando = status === "loading" || data?.cliente.id !== clienteId;
 
-  const [estadoCuentaOpen, setEstadoCuentaOpen] = useState(false);
   const [referentesOpen, setReferentesOpen] = useState(false);
   const [notaTarget, setNotaTarget] = useState<NotaFormTarget | null>(null);
   const [notaOpen, setNotaOpen] = useState(false);
@@ -130,9 +130,25 @@ export function ClienteDetailDialog({ clienteId, open, onOpenChange }: ClienteDe
               {/* Datos personales */}
               <div className="space-y-1.5 rounded-lg bg-muted/50 p-3 text-[0.8rem]">
                 <DatoRow icon={<MapPin className="size-3.5" />} valor={data.cliente.direccion} />
-                {data.cliente.ubicacionCobro && (
-                  <DatoRow icon={<ReceiptText className="size-3.5" />} valor={data.cliente.ubicacionCobro} />
-                )}
+                {data.cliente.ubicacionCobro &&
+                  (mapaUrl(data.cliente.ubicacionCobro) ? (
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <MapPinned className="size-3.5 shrink-0" />
+                      <a
+                        href={mapaUrl(data.cliente.ubicacionCobro)!}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-foreground underline underline-offset-2"
+                      >
+                        Punto de cobro en el mapa
+                      </a>
+                    </div>
+                  ) : (
+                    <DatoRow
+                      icon={<ReceiptText className="size-3.5" />}
+                      valor={data.cliente.ubicacionCobro}
+                    />
+                  ))}
                 <DatoRow
                   icon={<MapPin className="size-3.5" />}
                   valor={data.localidadNombre ? `Localidad: ${data.localidadNombre}` : null}
@@ -157,12 +173,7 @@ export function ClienteDetailDialog({ clienteId, open, onOpenChange }: ClienteDe
               </div>
 
               {/* Acciones */}
-              <div className="grid grid-cols-4 gap-2">
-                <ActionButton
-                  icon={<ReceiptText />}
-                  label="Cuenta"
-                  onClick={() => setEstadoCuentaOpen(true)}
-                />
+              <div className="grid grid-cols-3 gap-2">
                 <WhatsappButton telefonos={data.telefonos}>
                   <ActionButtonShell icon={<Phone />} label="WhatsApp" disabled={data.telefonos.length === 0} />
                 </WhatsappButton>
@@ -172,6 +183,29 @@ export function ClienteDetailDialog({ clienteId, open, onOpenChange }: ClienteDe
                   onClick={() => setReferentesOpen(true)}
                 />
                 <ActionButton icon={<Plus />} label="Nota" onClick={abrirNuevaNota} />
+              </div>
+
+              {/* Estado de cuenta: los planes con su saldo, embebidos. Ya viene
+                  en el detalle (/estado_cuenta), así que no cuesta un request. */}
+              <div>
+                <div className="mb-2 text-[0.68rem] font-bold tracking-widest text-muted-foreground uppercase">
+                  Estado de cuenta
+                </div>
+                {data.estadoDeCuenta.planes.length === 0 ? (
+                  <EmptyState icon={<ReceiptText />}>Sin planes de pago.</EmptyState>
+                ) : (
+                  <EstadoCuentaPanel
+                    data={data.estadoDeCuenta}
+                    cliente={{
+                      nombreCompleto: data.cliente.nombreCompleto,
+                      dni: data.cliente.dni,
+                      direccion: data.cliente.direccion,
+                      localidadNombre: data.localidadNombre,
+                    }}
+                    telefonos={data.telefonos}
+                    referentes={data.referentes}
+                  />
+                )}
               </div>
 
               {/* Notas */}
@@ -220,26 +254,12 @@ export function ClienteDetailDialog({ clienteId, open, onOpenChange }: ClienteDe
       </Dialog>
 
       {data && (
-        <>
-          <EstadoCuentaDialog
-            clienteId={data.cliente.id}
-            telefonos={data.telefonos}
-            cliente={{
-              nombreCompleto: data.cliente.nombreCompleto,
-              dni: data.cliente.dni,
-              direccion: data.cliente.direccion,
-              localidadNombre: data.localidadNombre,
-            }}
-            open={estadoCuentaOpen}
-            onOpenChange={setEstadoCuentaOpen}
-          />
-          <ReferentesDialog
-            referentes={data.referentes}
-            clienteNombre={data.cliente.nombreCompleto}
-            open={referentesOpen}
-            onOpenChange={setReferentesOpen}
-          />
-        </>
+        <ReferentesDialog
+          referentes={data.referentes}
+          clienteNombre={data.cliente.nombreCompleto}
+          open={referentesOpen}
+          onOpenChange={setReferentesOpen}
+        />
       )}
       <NotaFormDialog
         target={notaTarget}
