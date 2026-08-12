@@ -190,7 +190,13 @@ export function EstadoCuentaPanel({
         </Button>
         <Button size="sm" className="ml-auto" onClick={enviar} disabled={enviando}>
           {enviando ? <Loader2 className="animate-spin" /> : <MessageCircle />}
-          {enviando ? "Generando…" : destinatarios.length ? "Enviar por WhatsApp" : "Enviar"}
+          {enviando
+            ? "Generando…"
+            : onEnviado
+              ? "Enviar PDF y continuar"
+              : destinatarios.length
+                ? "Enviar por WhatsApp"
+                : "Enviar"}
         </Button>
       </div>
 

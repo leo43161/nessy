@@ -223,7 +223,7 @@ export function aClienteListado(
     dni: f.DNI ?? "",
     nombreCompleto: f.Nombre_completo ?? "—",
     // La columna existe pero en producción está en NULL para todas las filas.
-    status: f.status === "Inactivo" || f.status === "Moroso" ? f.status : "Activo",
+    status: f.status === "Inactivo" ? "Inactivo" : "Activo",
     direccion: f.direccion,
     ubicacionCobro: f.ubicacion_geografica_de_destino_de_cobro,
     idLocalidad: f.id_localidad,
@@ -249,7 +249,7 @@ export function aCliente(f: FilaCliente): Cliente {
     fechaDeNacimiento: f.fecha_de_nacimiento,
     idLocalidad: f.id_localidad,
     ubicacionCobro: f.ubicacion_geografica_de_destino_de_cobro,
-    status: f.status === "Inactivo" || f.status === "Moroso" ? f.status : "Activo",
+    status: f.status === "Inactivo" ? "Inactivo" : "Activo",
   };
 }
 

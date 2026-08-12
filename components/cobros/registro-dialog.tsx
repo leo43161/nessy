@@ -18,9 +18,11 @@ import { InitialsAvatar } from "@/components/shared/initials-avatar";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { WhatsappButton } from "@/components/shared/whatsapp-button";
 import { EstadoCuentaDialog } from "@/components/clientes/estado-cuenta-dialog";
+import { NotasCliente } from "@/components/clientes/notas-cliente";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { registrarAdvertencia, registrarPago } from "@/store/slices/cobros.slice";
 import { useMetodosDePago } from "@/hooks/use-catalogos";
+import { marcarWhatsAppEnviado } from "@/services/cobros.service";
 import { obtenerUbicacion } from "@/lib/geo";
 import { fmtMoney, formatFecha, mapaUrl } from "@/lib/format";
 import {
@@ -166,7 +168,6 @@ export function RegistroDialog({ cobro, open, onOpenChange, onVerCliente }: Regi
           <div className="flex items-center gap-3.5">
             <InitialsAvatar
               nombre={cliente.nombreCompleto}
-              moroso={cliente.status === "Moroso"}
               size="lg"
             />
             <div className="min-w-0">
@@ -203,6 +204,9 @@ export function RegistroDialog({ cobro, open, onOpenChange, onVerCliente }: Regi
               <StatusBadge estado={cobro.estado} vencido={vencido} />
             </InfoCard>
           </div>
+
+          {/* Las notas van antes de cobrar: son el contexto de la visita. */}
+          <NotasCliente clienteId={cliente.id} />
 
           {asistiendo && (
             <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[0.75rem] text-amber-800 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-200">
@@ -396,6 +400,10 @@ export function RegistroDialog({ cobro, open, onOpenChange, onVerCliente }: Regi
         onOpenChange={(o) => {
           setEstadoCuentaOpen(o);
           if (!o && estadoCuentaObligatorio) {
+            // En modo obligatorio la única forma de cerrar es enviando: ni la
+            // cruz, ni Escape, ni el click afuera lo cierran. Así que llegar
+            // acá **es** el envío, y se deja registrado en la cuota.
+            marcarWhatsAppEnviado(cobro.id);
             setEstadoCuentaObligatorio(false);
             // La visita terminó: se cierra el registro. Vía `cerrar` y no
             // `onOpenChange` para que se olviden el monto y la fecha tipeados,

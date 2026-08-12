@@ -1,7 +1,11 @@
-import { Document, Page, Text, View, StyleSheet, pdf } from "@react-pdf/renderer";
-import { APP_NAME } from "@/lib/constants";
+import { Document, Image, Page, Text, View, StyleSheet, pdf } from "@react-pdf/renderer";
 import { fmtMoney, formatFecha } from "@/lib/format";
+import { calcularCumplimiento } from "@/lib/cumplimiento";
+import { EMPRESA_LOGO, EMPRESA_NOMBRE, EMPRESA_PIE } from "@/lib/marca";
 import type { EstadoDeCuenta, EstadoDeCuentaPlan } from "@/types";
+
+// El nombre y el logo salen de `lib/marca.ts`: es el único archivo que hay que
+// tocar para cambiarlos, acá y en la app del cobrador.
 
 /** Datos del cliente que no vienen en EstadoDeCuenta pero sí en el encabezado */
 export interface EstadoCuentaPdfCliente {
@@ -16,8 +20,7 @@ export interface EstadoCuentaPdfCliente {
  * Mensaje institucional del bloque superior (el banco pone su promo acá).
  * Viene de Plantillas_de_mensaje.Mensaje; esto es el fallback hasta que exista la API.
  */
-const LEYENDA_DEFAULT =
-  "Gracias por mantener tu plan al día.\nAnte cualquier consulta, comunicate con tu cobrador asignado.";
+const LEYENDA_DEFAULT = `Gracias por mantener tu plan al día.\n${EMPRESA_PIE}`;
 
 const styles = StyleSheet.create({
   page: {
@@ -30,7 +33,18 @@ const styles = StyleSheet.create({
   },
 
   // ── Encabezado ──
+  encabezado: { flexDirection: "row", alignItems: "center", gap: 8 },
+  logoImg: { width: 30, height: 30, objectFit: "contain" },
   logo: { fontFamily: "Helvetica-Bold", fontSize: 19, color: "#0d4f8b", letterSpacing: -0.4 },
+
+  // Comportamiento de pago
+  cumplimiento: { marginTop: 18, borderWidth: 0.7, borderColor: "#0d4f8b", padding: 8 },
+  cumplimientoTitulo: { fontFamily: "Helvetica-Bold", fontSize: 8, color: "#0d4f8b" },
+  cumplimientoFila: { flexDirection: "row", justifyContent: "space-between", marginTop: 3 },
+  cumplimientoLabel: { fontSize: 7.5 },
+  cumplimientoValor: { fontFamily: "Helvetica-Bold", fontSize: 7.5 },
+  advertenciaFila: { flexDirection: "row", justifyContent: "space-between", marginTop: 2 },
+  advertenciaTexto: { fontSize: 7, color: "#8b1a1a" },
   paginaBox: { position: "absolute", top: 34, right: 34, alignItems: "flex-end" },
   paginaLabel: { fontSize: 7 },
 
@@ -259,15 +273,25 @@ export function EstadoCuentaDocument({
 }) {
   const domicilio = [cliente.codigoPostal, cliente.localidadNombre].filter(Boolean).join(" ");
   const lineasLeyenda = leyenda.split("\n").filter((l) => l.trim() !== "");
+  const cumplimiento = calcularCumplimiento(ec, ec.generadoEl);
 
   return (
     <Document
       title={`Estado de cuenta ${cliente.nombreCompleto}`}
-      author={APP_NAME}
+      author={EMPRESA_NOMBRE}
       subject="Estado de cuenta unificado"
     >
       <Page size="A4" style={styles.page}>
-        <Text style={styles.logo}>{APP_NAME.toUpperCase()}</Text>
+        {/* El logo es un data URI (lib/marca.ts): tiene que viajar dentro del
+            archivo, porque el PDF se manda como adjunto y una URL externa
+            llegaría al cliente como un recuadro vacío. Sin logo cargado queda
+            solo el nombre, que es el estado de hoy. */}
+        <View style={styles.encabezado}>
+          {/* eslint-disable-next-line jsx-a11y/alt-text -- es el Image de
+              @react-pdf/renderer, no un <img>: no acepta alt */}
+          {EMPRESA_LOGO !== "" && <Image src={EMPRESA_LOGO} style={styles.logoImg} />}
+          <Text style={styles.logo}>{EMPRESA_NOMBRE.toUpperCase()}</Text>
+        </View>
 
         <View style={styles.paginaBox} fixed>
           <Text
@@ -342,10 +366,54 @@ export function EstadoCuentaDocument({
           )}
         </View>
 
+        {/* Comportamiento de pago: la efectividad con la misma fórmula que se
+            le aplica a los cobradores, los atrasos y las advertencias que tiene
+            el cliente encima. */}
+        <View style={styles.cumplimiento}>
+          <Text style={styles.cumplimientoTitulo}>COMPORTAMIENTO DE PAGO</Text>
+
+          <View style={styles.cumplimientoFila}>
+            <Text style={styles.cumplimientoLabel}>Efectividad de pago</Text>
+            <Text style={styles.cumplimientoValor}>{cumplimiento.efectividad}%</Text>
+          </View>
+          <View style={styles.cumplimientoFila}>
+            <Text style={styles.cumplimientoLabel}>Cuotas pagadas</Text>
+            <Text style={styles.cumplimientoValor}>
+              {cumplimiento.cuotasPagadas} de {cumplimiento.cuotasTotales}
+            </Text>
+          </View>
+          <View style={styles.cumplimientoFila}>
+            <Text style={[styles.cumplimientoLabel, cumplimiento.cuotasAtrasadas > 0 ? styles.vencido : {}]}>
+              Cuotas atrasadas
+            </Text>
+            <Text style={[styles.cumplimientoValor, cumplimiento.cuotasAtrasadas > 0 ? styles.vencido : {}]}>
+              {cumplimiento.cuotasAtrasadas}
+            </Text>
+          </View>
+
+          {cumplimiento.advertencias.length > 0 && (
+            <>
+              <Text style={[styles.cumplimientoTitulo, { marginTop: 6 }]}>
+                ADVERTENCIAS ({cumplimiento.advertencias.length})
+              </Text>
+              {cumplimiento.advertencias.map((a, i) => (
+                <View key={i} style={styles.advertenciaFila}>
+                  <Text style={styles.advertenciaTexto}>
+                    {formatFecha(a.fecha)}  {a.motivo}
+                  </Text>
+                  {a.recargo > 0 && (
+                    <Text style={styles.advertenciaTexto}>recargo {num(a.recargo)}</Text>
+                  )}
+                </View>
+              ))}
+            </>
+          )}
+        </View>
+
         <Text style={styles.footer} fixed>
           Este documento es un detalle informativo de tu plan de pagos y no constituye comprobante
           fiscal.{"\n"}
-          Emitido por {APP_NAME} el {formatFecha(ec.generadoEl)}. Ante diferencias, consultá con tu
+          Emitido por {EMPRESA_NOMBRE} el {formatFecha(ec.generadoEl)}. Ante diferencias, consultá con tu
           cobrador asignado.
         </Text>
       </Page>

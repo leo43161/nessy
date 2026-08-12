@@ -26,7 +26,12 @@ export type PagoEstado = "Pendiente" | "Pagado";
 /** Plan_de_pagos.Status */
 export type PlanStatus = "Activo" | "Completado" | "Incumplido" | "Refinanciado";
 
-export type ClienteStatus = "Activo" | "Inactivo" | "Moroso";
+/**
+ * `Clientes.status`. **No es la baja del cliente** — eso es `Clientes.Activo`,
+ * que maneja el borrado lógico. Es una etiqueta libre que la base trae en NULL
+ * para todas las filas.
+ */
+export type ClienteStatus = "Activo" | "Inactivo";
 
 export interface Localidad {
   id: number;

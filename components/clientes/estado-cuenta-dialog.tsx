@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -12,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EstadoCuentaPanel } from "@/components/clientes/estado-cuenta-panel";
+import { NotasCliente } from "@/components/clientes/notas-cliente";
 import { getEstadoDeCuenta } from "@/services/clientes.service";
 import { formatFecha } from "@/lib/format";
 // Solo el tipo: el módulo del PDF se carga con import() dinámico, no acá.
@@ -107,13 +109,24 @@ function EstadoCuentaContent({
       <DialogHeader>
         <DialogTitle className="text-center">Estado de Cuenta</DialogTitle>
         <DialogDescription className="text-center">
-          {obligatorio
-            ? "Mandale el comprobante al cliente para cerrar la visita."
-            : data
-              ? `${data.clienteNombre} · ${formatFecha(data.generadoEl)}`
-              : "Cargando…"}
+          {data ? `${data.clienteNombre} · ${formatFecha(data.generadoEl)}` : "Cargando…"}
         </DialogDescription>
       </DialogHeader>
+
+      {/* El aviso va en rojo y dice explícitamente que no hay salida: el
+          cobrador tiene que ver que la pantalla no se cierra sola. */}
+      {obligatorio && (
+        <div className="flex items-start gap-2 rounded-lg border border-red-300 bg-red-50 px-3 py-2.5 text-red-800 dark:border-red-800 dark:bg-red-950/50 dark:text-red-200">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+          <div className="space-y-0.5 text-[0.8rem]">
+            <p className="font-bold">Falta enviar el comprobante</p>
+            <p>
+              Tenés que mandarle el PDF del estado de cuenta al cliente para poder continuar. Esta
+              ventana no se cierra hasta que lo envíes.
+            </p>
+          </div>
+        </div>
+      )}
 
       {cargando || !data ? (
         <div className="space-y-2">
@@ -122,6 +135,8 @@ function EstadoCuentaContent({
         </div>
       ) : (
         <>
+          <NotasCliente clienteId={clienteId} />
+
           <EstadoCuentaPanel
             data={data}
             cliente={cliente}

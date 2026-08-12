@@ -14,8 +14,6 @@ interface ClienteCardProps {
 }
 
 export function ClienteCard({ cliente, mostrarCobrador, onClick }: ClienteCardProps) {
-  const moroso = cliente.status === "Moroso";
-
   return (
     <button
       type="button"
@@ -25,12 +23,9 @@ export function ClienteCard({ cliente, mostrarCobrador, onClick }: ClienteCardPr
         CLIENTE_BORDER[cliente.status]
       )}
     >
-      <InitialsAvatar nombre={cliente.nombreCompleto} moroso={moroso} size="md" />
+      <InitialsAvatar nombre={cliente.nombreCompleto} size="md" />
       <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-bold">
-          {cliente.nombreCompleto}
-          {moroso && " ⚠️"}
-        </div>
+        <div className="truncate text-sm font-bold">{cliente.nombreCompleto}</div>
         <div className="flex items-center gap-1 text-[0.7rem] text-muted-foreground">
           <MapPin className="size-3 shrink-0" />
           <span className="truncate">{cliente.localidadNombre ?? "Sin localidad"}</span>

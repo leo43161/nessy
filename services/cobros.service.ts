@@ -140,3 +140,22 @@ export async function registrarAdvertencia(
     Recargo: payload.recargo,
   });
 }
+
+/**
+ * Deja registrado que el comprobante de la cuota se mandó por WhatsApp
+ * (`Pagos_por_realizar.WhatsApp_Enviado`).
+ *
+ * El diálogo obliga a enviarlo, pero eso solo vive en la pantalla: sin esto,
+ * cerrada la app nadie puede saber después si el mensaje salió.
+ *
+ * No corta el flujo si falla. El envío ya se hizo —el cliente tiene el
+ * comprobante— y volver a obligar al cobrador porque la API no respondió sería
+ * castigarlo por un problema que no es suyo.
+ */
+export async function marcarWhatsAppEnviado(cuotaId: number): Promise<void> {
+  try {
+    await api.post("/cuotas/whatsapp", { id_cuota: cuotaId });
+  } catch {
+    // silencio a propósito
+  }
+}

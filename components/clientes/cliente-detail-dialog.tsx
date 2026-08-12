@@ -116,7 +116,6 @@ export function ClienteDetailDialog({ clienteId, open, onOpenChange }: ClienteDe
               <div className="flex items-center gap-3.5">
                 <InitialsAvatar
                   nombre={data.cliente.nombreCompleto}
-                  moroso={data.cliente.status === "Moroso"}
                   size="lg"
                 />
                 <div className="min-w-0">

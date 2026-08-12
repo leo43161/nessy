@@ -17,7 +17,6 @@ interface CobroCardProps {
 }
 
 export function CobroCard({ cobro, hoy, mostrarCobrador, onClick }: CobroCardProps) {
-  const moroso = cobro.cliente.status === "Moroso";
   const vencido = esVencido(cobro.estado, cobro.fechaAcordada, hoy);
   const fueraDeRango = cobro.dentroRango === false;
   const asistencia = cobro.cobradoPorId != null && cobro.cobradoPorId !== cobro.cobradorAsignadoId;
@@ -38,11 +37,10 @@ export function CobroCard({ cobro, hoy, mostrarCobrador, onClick }: CobroCardPro
         borde
       )}
     >
-      <InitialsAvatar nombre={cobro.cliente.nombreCompleto} moroso={moroso} />
+      <InitialsAvatar nombre={cobro.cliente.nombreCompleto} />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
           <span className="truncate text-sm font-bold">{cobro.cliente.nombreCompleto}</span>
-          {moroso && <span>⚠️</span>}
           {fueraDeRango && (
             <span
               title="Cobro registrado fuera de rango"

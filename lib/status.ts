@@ -95,7 +95,6 @@ export function esVencido(estado: PagoEstado, fechaAcordada: string, hoy: string
 export const CLIENTE_BORDER: Record<ClienteStatus, string> = {
   Activo: "border-l-green-500",
   Inactivo: "border-l-muted-foreground/40",
-  Moroso: "border-l-red-500",
 };
 
 export const PLAN_STATUS_BADGE: Record<PlanStatus, string> = {
