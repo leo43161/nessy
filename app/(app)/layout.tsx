@@ -45,7 +45,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     // centrada y con el fondo apagado a los costados. No es una limitación: es
     // la misma pantalla que el cobrador usa en la calle, y estirarla a 1920px
     // dejaría una fila de datos perdida en medio del vacío.
-    <div className="min-h-screen bg-muted/60 dark:bg-neutral-950">
+    // El exterior va MÁS CLARO que la franja en oscuro: `--background` ya es
+    // casi negro, así que un fondo más oscuro no se distinguía —medido en el
+    // navegador, los dos daban el mismo color y la franja solo la separaba un
+    // borde al 10%—. Con neutral-900 alrededor, la app se lee como un teléfono
+    // apoyado sobre el escritorio.
+    <div className="min-h-screen bg-muted/60 dark:bg-neutral-900">
       <div className="mx-auto flex min-h-screen w-full max-w-md flex-col bg-background shadow-xl sm:border-x sm:border-border">
         <Navbar />
         {/* pb-28: la barra de navegación es fija y taparía el final del listado */}
