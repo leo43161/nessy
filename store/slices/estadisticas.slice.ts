@@ -1,6 +1,6 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import * as estadisticasService from "@/services/estadisticas.service";
-import type { EstadisticasCobrador } from "@/types";
+import type { EstadisticasCobrador, RangoFechas } from "@/types";
 
 type LoadStatus = "idle" | "loading" | "succeeded" | "failed";
 
@@ -18,11 +18,11 @@ const initialState: EstadisticasState = {
 
 export const fetchEstadisticas = createAsyncThunk<
   EstadisticasCobrador,
-  { cobradorId: number; fecha: string },
+  { cobradorId: number; fecha: string; rango?: RangoFechas },
   { rejectValue: string }
->("estadisticas/fetch", async ({ cobradorId, fecha }, { rejectWithValue }) => {
+>("estadisticas/fetch", async ({ cobradorId, fecha, rango }, { rejectWithValue }) => {
   try {
-    return await estadisticasService.getEstadisticas(cobradorId, fecha);
+    return await estadisticasService.getEstadisticas(cobradorId, fecha, rango);
   } catch {
     return rejectWithValue("No se pudieron cargar las estadísticas.");
   }

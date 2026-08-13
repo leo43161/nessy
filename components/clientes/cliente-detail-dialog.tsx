@@ -260,7 +260,9 @@ export function ClienteDetailDialog({ clienteId, open, onOpenChange }: ClienteDe
       {data && (
         <ReferentesDialog
           referentes={data.referentes}
+          clienteId={data.cliente.id}
           clienteNombre={data.cliente.nombreCompleto}
+          notas={data.notas}
           open={referentesOpen}
           onOpenChange={setReferentesOpen}
         />

@@ -315,3 +315,9 @@ export interface EditarNotaPayload {
   notaId: number;
   contenido: string;
 }
+
+/** Rango de fechas inclusivo, en ISO (YYYY-MM-DD) */
+export interface RangoFechas {
+  desde: string;
+  hasta: string;
+}

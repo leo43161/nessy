@@ -3,7 +3,7 @@ import { getCobradores } from "@/services/cobradores.service";
 import { addDays, todayISO } from "@/lib/format";
 import { VENTANA_FUTURO, VENTANA_PASADO } from "@/lib/constants";
 import { esCobrado, esVencido } from "@/lib/status";
-import type { CobroDelDia, EstadisticasCobrador, RankingCobrador } from "@/types";
+import type { CobroDelDia, EstadisticasCobrador, RangoFechas, RankingCobrador } from "@/types";
 
 /** Ranking de cobradores para una fecha (efectividad + dinero cobrado) */
 function calcularRanking(cobros: CobroDelDia[], cobradores: { id: number; nombreCompleto: string }[]): RankingCobrador[] {
@@ -27,7 +27,12 @@ function calcularRanking(cobros: CobroDelDia[], cobradores: { id: number; nombre
 /** Estadísticas completas del cobrador para una fecha */
 export async function getEstadisticas(
   cobradorId: number,
-  fecha: string
+  fecha: string,
+  /**
+   * Período a mirar. Sin rango se usa la ventana de siempre alrededor de
+   * `fecha` (10 días atrás, 8 adelante), que es el worklist del cobrador.
+   */
+  rango?: RangoFechas,
 ): Promise<EstadisticasCobrador> {
   // `/estadisticas` NO existe: es la tarea B.3, todavía sin hacer del lado de
   // la base. Mientras tanto se calcula acá desde `/cuotas`, que trae todo lo
@@ -39,13 +44,12 @@ export async function getEstadisticas(
   const [cobros, cobradores] = await Promise.all([getHistorico(), getCobradores()]);
 
   const hoy = todayISO();
-  const ranking = calcularRanking(cobrosDeLaVentanaDe(cobros, fecha), cobradores);
+  const delPeriodo = enPeriodo(cobros, fecha, rango);
+  const ranking = calcularRanking(delPeriodo, cobradores);
   const mio = ranking.find((r) => r.cobradorId === cobradorId);
   const mejor = ranking[0];
 
-  const cobrosMios = cobrosDeLaVentanaDe(cobros, fecha).filter(
-    (c) => c.cobradorAsignadoId === cobradorId,
-  );
+  const cobrosMios = delPeriodo.filter((c) => c.cobradorAsignadoId === cobradorId);
   const totalDia = cobrosMios.length;
   const cobradosDia = cobrosMios.filter((c) => esCobrado(c.estado)).length;
   const gestionadosDia = cobrosMios.filter((c) => c.estado !== "Pendiente").length;
@@ -88,9 +92,20 @@ export async function getEstadisticas(
   };
 }
 
-/** Misma ventana que usa el worklist, pero sobre cuotas ya traídas. */
-function cobrosDeLaVentanaDe(cobros: CobroDelDia[], fecha: string): CobroDelDia[] {
-  const lo = addDays(-VENTANA_PASADO, fecha);
-  const hi = addDays(VENTANA_FUTURO, fecha);
+/**
+ * Cuotas del período elegido.
+ *
+ * Con rango explícito manda el rango; sin él, la ventana del worklist alrededor
+ * de la fecha de trabajo. Se filtra por `fechaAcordada` —cuándo vencía— y no
+ * por cuándo se cobró: la efectividad de un período es sobre lo que había que
+ * cobrar en ese período, no sobre lo que entró.
+ */
+function enPeriodo(
+  cobros: CobroDelDia[],
+  fecha: string,
+  rango?: RangoFechas,
+): CobroDelDia[] {
+  const lo = rango ? rango.desde : addDays(-VENTANA_PASADO, fecha);
+  const hi = rango ? rango.hasta : addDays(VENTANA_FUTURO, fecha);
   return cobros.filter((c) => c.fechaAcordada >= lo && c.fechaAcordada <= hi);
 }

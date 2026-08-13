@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Crown, HandCoins, Target, TrendingDown, TriangleAlert } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -8,8 +8,91 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { fetchEstadisticas } from "@/store/slices/estadisticas.slice";
 import { cn } from "@/lib/utils";
-import { fmtMoney, fmtPct, formatFecha } from "@/lib/format";
-import type { EstadisticasCobrador } from "@/types";
+import { fmtMoney, fmtPct, formatFecha, todayISO } from "@/lib/format";
+import { PRESETS, rangoDePeriodo, type PeriodoId } from "@/lib/periodos";
+import { Input } from "@/components/ui/input";
+import type { EstadisticasCobrador, RangoFechas } from "@/types";
+
+/**
+ * Período que se está mirando.
+ *
+ * "Jornada" —el arranque— es la ventana del worklist alrededor de la fecha de
+ * trabajo: es lo que el cobrador mira antes que nada. El resto son los períodos
+ * de siempre, y "Rango" abre las dos fechas a mano.
+ */
+function FiltroPeriodo({
+  activo,
+  onElegir,
+  rangoManual,
+  onRangoManual,
+}: {
+  activo: PeriodoId | null;
+  onElegir: (p: PeriodoId | null) => void;
+  rangoManual: RangoFechas;
+  onRangoManual: (r: RangoFechas) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="scrollbar-none flex gap-1.5 overflow-x-auto">
+        <Chip activo={activo === null} onClick={() => onElegir(null)}>
+          Jornada
+        </Chip>
+        {PRESETS.map((p) => (
+          <Chip key={p.id} activo={activo === p.id} onClick={() => onElegir(p.id)}>
+            {p.label}
+          </Chip>
+        ))}
+      </div>
+
+      {activo === "personalizado" && (
+        <div className="flex items-center gap-2">
+          <Input
+            type="date"
+            aria-label="Fecha desde"
+            value={rangoManual.desde}
+            onChange={(e) => onRangoManual({ ...rangoManual, desde: e.target.value })}
+            className="h-8 flex-1 text-xs"
+          />
+          <span className="text-xs text-muted-foreground">→</span>
+          <Input
+            type="date"
+            aria-label="Fecha hasta"
+            min={rangoManual.desde}
+            value={rangoManual.hasta}
+            onChange={(e) => onRangoManual({ ...rangoManual, hasta: e.target.value })}
+            className="h-8 flex-1 text-xs"
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Chip({
+  activo,
+  onClick,
+  children,
+}: {
+  activo: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={activo}
+      className={cn(
+        "shrink-0 rounded-full border px-3 py-1 text-xs font-medium whitespace-nowrap transition-colors",
+        activo
+          ? "border-primary bg-primary text-primary-foreground"
+          : "border-input text-muted-foreground hover:text-foreground",
+      )}
+    >
+      {children}
+    </button>
+  );
+}
 
 export default function EstadisticasPage() {
   const dispatch = useAppDispatch();
@@ -17,19 +100,52 @@ export default function EstadisticasPage() {
   const workDate = useAppSelector((s) => s.ui.workDate);
   const { data, status } = useAppSelector((s) => s.estadisticas);
 
+  // `null` = la jornada, que es la ventana del worklist alrededor de la fecha
+  // de trabajo. Es el arranque porque el cobrador mira su día antes que nada.
+  const [periodo, setPeriodo] = useState<PeriodoId | null>(null);
+  const [rangoManual, setRangoManual] = useState<RangoFechas>({ desde: "", hasta: "" });
+
+  const rango =
+    periodo === "personalizado"
+      ? rangoManual.desde !== "" && rangoManual.hasta !== ""
+        ? rangoManual
+        : undefined
+      : periodo
+        ? rangoDePeriodo(periodo, workDate ?? todayISO())
+        : undefined;
+
   useEffect(() => {
-    if (cobrador && workDate) {
-      dispatch(fetchEstadisticas({ cobradorId: cobrador.id, fecha: workDate }));
-    }
-  }, [cobrador, workDate, dispatch]);
+    if (!cobrador || !workDate) return;
+    dispatch(fetchEstadisticas({ cobradorId: cobrador.id, fecha: workDate, rango }));
+    // `rango` se recalcula en cada render; lo que importa son sus valores.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cobrador, workDate, rango?.desde, rango?.hasta, dispatch]);
+
+  // Los filtros van arriba de todo y también mientras carga o falla: si
+  // desaparecieran, un período sin datos dejaría al cobrador sin forma de
+  // volver a otro.
+  const filtros = (
+    <FiltroPeriodo
+      activo={periodo}
+      onElegir={setPeriodo}
+      rangoManual={rangoManual}
+      onRangoManual={setRangoManual}
+    />
+  );
 
   if (status === "failed") {
-    return <EmptyState icon="⚠️">No se pudieron cargar las estadísticas.</EmptyState>;
+    return (
+      <div className="space-y-4">
+        {filtros}
+        <EmptyState icon="⚠️">No se pudieron cargar las estadísticas.</EmptyState>
+      </div>
+    );
   }
 
   if (!data || status === "loading") {
     return (
       <div className="space-y-4">
+        {filtros}
         <Skeleton className="h-48 rounded-xl" />
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <Skeleton className="h-24 rounded-xl" />
@@ -43,6 +159,8 @@ export default function EstadisticasPage() {
 
   return (
     <div className="space-y-4">
+      {filtros}
+
       {/* Ranking de cobradores */}
       <Card className="gap-3 px-4 py-4">
         <div className="flex items-center gap-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">

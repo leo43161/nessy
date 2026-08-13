@@ -12,12 +12,16 @@ import { InitialsAvatar } from "@/components/shared/initials-avatar";
 import { WhatsappButton } from "@/components/shared/whatsapp-button";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Button } from "@/components/ui/button";
+import { NotasCliente } from "@/components/clientes/notas-cliente";
 import { whatsappUrl } from "@/lib/format";
-import type { ReferenteDeCliente } from "@/types";
+import type { Nota, ReferenteDeCliente } from "@/types";
 
 interface ReferentesDialogProps {
   referentes: ReferenteDeCliente[];
+  clienteId: number;
   clienteNombre: string;
+  /** Notas ya cargadas por la ficha: evitan pedirlas de nuevo */
+  notas?: Nota[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
@@ -25,7 +29,9 @@ interface ReferentesDialogProps {
 /** Referentes del cliente, una card por cada uno */
 export function ReferentesDialog({
   referentes,
+  clienteId,
   clienteNombre,
+  notas,
   open,
   onOpenChange,
 }: ReferentesDialogProps) {
@@ -36,6 +42,8 @@ export function ReferentesDialog({
           <DialogTitle className="text-center">Referentes</DialogTitle>
           <DialogDescription className="text-center">{clienteNombre}</DialogDescription>
         </DialogHeader>
+
+        <NotasCliente clienteId={clienteId} notas={notas} />
 
         {referentes.length === 0 ? (
           <EmptyState icon="👥">Este cliente no tiene referentes cargados.</EmptyState>
