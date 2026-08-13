@@ -1,6 +1,6 @@
 "use client";
 
-import { Phone } from "lucide-react";
+import { MessageCircle } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -12,6 +12,7 @@ import { InitialsAvatar } from "@/components/shared/initials-avatar";
 import { WhatsappButton } from "@/components/shared/whatsapp-button";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Button } from "@/components/ui/button";
+import { whatsappUrl } from "@/lib/format";
 import type { ReferenteDeCliente } from "@/types";
 
 interface ReferentesDialogProps {
@@ -59,10 +60,12 @@ export function ReferentesDialog({
                   {ref.telefonos.map((t) => (
                     <a
                       key={t.id}
-                      href={`tel:${t.numero}`}
+                      href={whatsappUrl(t.numero)}
+                      target="_blank"
+                      rel="noopener noreferrer"
                       className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1 text-[0.68rem] font-medium hover:bg-muted/70"
                     >
-                      <Phone className="size-3" />
+                      <MessageCircle className="size-3" />
                       {t.numero}
                     </a>
                   ))}

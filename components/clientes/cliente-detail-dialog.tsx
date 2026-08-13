@@ -6,6 +6,7 @@ import {
   MapPin,
   MapPinned,
   Pencil,
+  MessageCircle,
   Phone,
   Plus,
   ReceiptText,
@@ -41,7 +42,7 @@ import { NotaFormDialog, type NotaFormTarget } from "@/components/notas/nota-for
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { fetchClienteDetalle } from "@/store/slices/clientes.slice";
 import { deleteNota } from "@/store/slices/notas.slice";
-import { formatFecha, mapaUrl } from "@/lib/format";
+import { formatFecha, mapaUrl, whatsappUrl } from "@/lib/format";
 import type { Nota } from "@/types";
 
 interface ClienteDetailDialogProps {
@@ -152,14 +153,18 @@ export function ClienteDetailDialog({ clienteId, open, onOpenChange }: ClienteDe
                   icon={<MapPin className="size-3.5" />}
                   valor={data.localidadNombre ? `Localidad: ${data.localidadNombre}` : null}
                 />
+                {/* Los números abren WhatsApp, no el teléfono: el cobrador
+                    escribe, y así queda registro de lo que se habló. */}
                 <div className="flex flex-wrap gap-1.5 pt-1">
                   {data.telefonos.map((t) => (
                     <a
                       key={t.id}
-                      href={`tel:${t.numero}`}
+                      href={whatsappUrl(t.numero)}
+                      target="_blank"
+                      rel="noopener noreferrer"
                       className="inline-flex items-center gap-1 rounded-full bg-background px-2 py-1 text-[0.7rem] font-medium hover:bg-muted"
                     >
-                      <Phone className="size-3" />
+                      <MessageCircle className="size-3" />
                       {t.numero}
                     </a>
                   ))}

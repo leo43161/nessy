@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, Loader2, Phone, ReceiptText, User } from "lucide-react";
+import { AlertTriangle, Loader2, MessageCircle, ReceiptText, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -308,15 +308,15 @@ export function RegistroDialog({ cobro, open, onOpenChange, onVerCliente }: Regi
             </div>
           )}
 
-          <div className="grid grid-cols-3 gap-2">
-            <ActionButton
-              icon={<Phone />}
-              label="Llamar"
-              disabled={cliente.telefonos.length === 0}
-              onClick={() => cliente.telefonos[0] && window.open(`tel:${cliente.telefonos[0].numero}`)}
-            />
+          {/* Dos botones y no tres: el de "Llamar" abría el discador, y todo
+              contacto con el cliente va por WhatsApp. */}
+          <div className="grid grid-cols-2 gap-2">
             <WhatsappButton telefonos={cliente.telefonos} mensaje={mensajeDemora}>
-              <ActionShell icon={<Phone />} label="WhatsApp" disabled={cliente.telefonos.length === 0} />
+              <ActionShell
+                icon={<MessageCircle />}
+                label="WhatsApp"
+                disabled={cliente.telefonos.length === 0}
+              />
             </WhatsappButton>
             <ActionButton
               icon={<User />}
