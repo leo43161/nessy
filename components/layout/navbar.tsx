@@ -31,7 +31,8 @@ export function Navbar() {
 
   return (
     <header className="sticky top-0 z-40 border-b bg-card shadow-sm">
-      <div className="mx-auto flex max-w-2xl flex-wrap items-center gap-x-2.5 gap-y-1 px-3.5 py-2">
+      {/* El ancho lo pone la franja del layout: acá no hace falta limitarlo */}
+      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 px-3.5 py-2">
         <div className="flex size-9 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-orange-600">
           <HandCoins className="size-4.5 text-white" />
         </div>

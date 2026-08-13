@@ -41,10 +41,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen bg-muted/60 dark:bg-background">
-      <Navbar />
-      {/* pb-28: la barra de navegación es fija y taparía el final del listado */}
-      <main className="mx-auto max-w-2xl px-3.5 pt-4 pb-28">{children}</main>
+    // En escritorio la app se muestra como una franja del ancho de un teléfono,
+    // centrada y con el fondo apagado a los costados. No es una limitación: es
+    // la misma pantalla que el cobrador usa en la calle, y estirarla a 1920px
+    // dejaría una fila de datos perdida en medio del vacío.
+    <div className="min-h-screen bg-muted/60 dark:bg-neutral-950">
+      <div className="mx-auto flex min-h-screen w-full max-w-md flex-col bg-background shadow-xl sm:border-x sm:border-border">
+        <Navbar />
+        {/* pb-28: la barra de navegación es fija y taparía el final del listado */}
+        <main className="flex-1 px-3.5 pt-4 pb-28">{children}</main>
+      </div>
       <NavTabs />
     </div>
   );
