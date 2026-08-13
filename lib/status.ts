@@ -38,9 +38,21 @@ export const PAGO_ESTADO: Record<PagoEstado, PagoEstadoMeta> = {
       "bg-green-100 text-green-800 border-green-400 dark:bg-green-950 dark:text-green-300 dark:border-green-700",
     bar: "bg-green-500",
   },
+  // El cobrador fue y no pudo cobrar. Va en rojo como el vencido pero se
+  // nombra distinto: acá hubo gestión, no olvido.
+  Atrasado: {
+    label: "🚩 Atrasado",
+    short: "🚩 Atras.",
+    badge: "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300",
+    border: "border-l-red-500",
+    pill: "bg-red-500 text-white",
+    selected:
+      "bg-red-100 text-red-800 border-red-400 dark:bg-red-950 dark:text-red-300 dark:border-red-700",
+    bar: "bg-red-500",
+  },
 };
 
-export const PAGO_ESTADOS: PagoEstado[] = ["Pendiente", "Pagado"];
+export const PAGO_ESTADOS: PagoEstado[] = ["Pendiente", "Pagado", "Atrasado"];
 
 /**
  * Cómo se llama el cobro según cuánto entró. No es un estado de la cuota: la
@@ -89,7 +101,15 @@ export const MOTIVOS_ADVERTENCIA = [
 
 /** Vencido (derivado): sigue pendiente y la fecha acordada ya pasó */
 export function esVencido(estado: PagoEstado, fechaAcordada: string, hoy: string): boolean {
+  // Una cuota ya marcada `Atrasado` no se muestra como vencida: las dos cosas
+  // son ciertas, pero "atrasado" dice más —hubo visita y quedó el motivo—, así
+  // que gana ese chip. Vencido queda para lo que nadie fue a ver.
   return estado === "Pendiente" && fechaAcordada < hoy;
+}
+
+/** Vencida o atrasada: no se cobró y la fecha ya pasó, por la razón que sea */
+export function esDeuda(estado: PagoEstado, fechaAcordada: string, hoy: string): boolean {
+  return estado === "Atrasado" || esVencido(estado, fechaAcordada, hoy);
 }
 
 export const CLIENTE_BORDER: Record<ClienteStatus, string> = {

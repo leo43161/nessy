@@ -3,7 +3,7 @@
 // Las filas de abajo son capturas literales de la API en producción
 // (https://tucucompras.com.ar/fv1, 2026-08-05), no invenciones. Cubre lo que
 // muerde al traducir: los DECIMAL que llegan como string, el estado
-// "Atrasado" que el front no tiene, los NULL en campos que el tipo declara
+// "Atrasado" que ahora es un estado propio, los NULL en campos que el tipo declara
 // obligatorios, y el estado de cuenta, que mezcla cuotas con advertencias en
 // la misma lista de movimientos.
 import assert from "node:assert/strict";
@@ -100,8 +100,8 @@ assert.equal(aBooleanoNullable(null), null, "sin ubicación ≠ fuera de rango")
 assert.equal(aEstadoCuota("Pagado"), "Pagado");
 assert.equal(
   aEstadoCuota("Atrasado"),
-  "Pendiente",
-  "Atrasado cae en Pendiente: el front deriva Vencido por fecha y ESTADO[] no tiene esa clave",
+  "Atrasado",
+  "Atrasado llega tal cual: lo escribe el cobrador cuando fue y no pudo cobrar, y hay que poder distinguirlo de una vencida que nadie visitó",
 );
 
 assert.deepEqual(aTelefonos(["381-555-1234"]), [{ id: 1, numero: "381-555-1234" }]);

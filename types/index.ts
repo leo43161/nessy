@@ -6,22 +6,21 @@
 //  Advertencias_y_retrasos
 // ════════════════════════════════════════════════════════════════
 
-/** Estado de un pago por realizar (Pagos_por_realizar.Estado).
- *  "Vencido" no se guarda: se deriva (Pendiente con fecha pasada). */
 /**
- * Estado de un pago por realizar (`Pagos_por_realizar.Estado`).
+ * Estado de la cuota, tal como lo guarda `Pagos_por_realizar.Estado`.
  *
- * Decisión N.4: **manda la base**. La columna solo guarda `Pendiente`,
- * `Pagado` y `Atrasado`, y `Atrasado` se traduce a `Pendiente` al mapear
- * porque el front deriva "Vencido" de la fecha.
- *
- * Los tres estados que traía la maqueta ya no viven acá:
- *   - `Incomunicado` es una **advertencia** (`POST /advertencias`), no un
- *     estado de la cuota.
+ * Los tres estados que traía la maqueta no viven acá:
+ *   - `Incomunicado` es una **advertencia**, no un estado de la cuota.
  *   - `Adelanto` se deduce: se cobró más que lo esperado.
  *   - `Recargo` sale de una advertencia con monto, no de la cuota.
+ *
+ * `Atrasado` NO es lo mismo que vencido: vencido lo dice el calendario
+ * (pendiente + fecha pasada), atrasado lo pone el cobrador cuando fue y no
+ * pudo cobrar. Una cuota que nadie visitó hace meses está vencida pero no
+ * atrasada, y esa diferencia es lo que separa una gestión fallida de una
+ * cuota abandonada.
  */
-export type PagoEstado = "Pendiente" | "Pagado";
+export type PagoEstado = "Pendiente" | "Pagado" | "Atrasado";
 
 /** Plan_de_pagos.Status */
 export type PlanStatus = "Activo" | "Completado" | "Incumplido" | "Refinanciado";
@@ -287,8 +286,16 @@ export interface RegistrarPagoPayload {
 
 /** Registrar una advertencia (`POST /advertencias`) — ej. cliente incomunicado */
 export interface RegistrarAdvertenciaPayload {
-  /** La advertencia cuelga del plan, no de la cuota */
+  /** La advertencia queda registrada sobre el plan */
   planId: number;
+  /**
+   * La cuota que se fue a cobrar y no se pudo.
+   *
+   * Con `cuotaId` la API además la marca `Atrasado` y controla el umbral de
+   * refinanciación. Sin él la advertencia cuelga del plan y no queda registro
+   * de qué cuota era — que es lo que pasaba antes con todas.
+   */
+  cuotaId?: number;
   motivo: string;
   recargo?: number;
 }

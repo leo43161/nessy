@@ -5,7 +5,7 @@
 // adelantado) y, en el caso parcial, que se cree una cuota nueva por la
 // diferencia. Un error acá no rompe la pantalla: cobra mal.
 import assert from "node:assert/strict";
-import { esCobrado, esVencido, tipoDeCobro } from "./status.ts";
+import { esCobrado, esDeuda, esVencido, tipoDeCobro } from "./status.ts";
 
 const ESPERADO = 75000;
 
@@ -35,5 +35,25 @@ assert.equal(esCobrado("Pendiente"), false);
 assert.equal(esVencido("Pendiente", "2026-07-01", "2026-08-05"), true);
 assert.equal(esVencido("Pendiente", "2026-09-01", "2026-08-05"), false);
 assert.equal(esVencido("Pagado", "2026-07-01", "2026-08-05"), false, "una pagada nunca vence");
+
+// "Atrasado" y "Vencido" no son lo mismo, y esa diferencia es el punto.
+//
+// Vencido lo dice el calendario y no requiere que nadie haga nada. Atrasado lo
+// escribe el cobrador cuando fue y no pudo cobrar. Una atrasada NO se muestra
+// además como vencida: las dos son ciertas, pero atrasado dice más.
+assert.equal(
+  esVencido("Atrasado", "2026-07-01", "2026-08-05"),
+  false,
+  "una atrasada ya tiene su propio chip: no se muestra encima como vencida",
+);
+
+// Pero las dos son deuda: lo que no se cobró y ya venció, por la razón que sea.
+assert.equal(esDeuda("Atrasado", "2026-07-01", "2026-08-05"), true);
+assert.equal(esDeuda("Pendiente", "2026-07-01", "2026-08-05"), true, "vencida sin visitar");
+assert.equal(esDeuda("Pendiente", "2026-09-01", "2026-08-05"), false, "todavía no vence");
+assert.equal(esDeuda("Pagado", "2026-07-01", "2026-08-05"), false);
+
+// Una atrasada tampoco cuenta como cobrada, por más gestión que haya habido.
+assert.equal(esCobrado("Atrasado"), false);
 
 console.log("✓ status.ts OK");

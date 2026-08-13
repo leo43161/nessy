@@ -135,15 +135,17 @@ export function RegistroDialog({ cobro, open, onOpenChange, onVerCliente }: Regi
 
   const guardarAdvertencia = async () => {
     setRegistrando(true);
+    // Va con `cuotaId`: además de dejar el motivo, marca ESA cuota como
+    // atrasada. Sin él quedaba la advertencia colgada del plan y nadie podía
+    // saber después a qué cuota se había ido.
     const result = await dispatch(
-      registrarAdvertencia({ planId: cobro.planId, motivo }),
+      registrarAdvertencia({ planId: cobro.planId, cuotaId: cobro.id, motivo }),
     );
     setRegistrando(false);
 
     if (registrarAdvertencia.fulfilled.match(result)) {
-      // La cuota NO cambia de estado: sigue pendiente. Lo que queda registrado
-      // es por qué no se pudo cobrar (N.4).
-      toast.success(`Advertencia registrada: ${motivo}`);
+      // La cuota queda `Atrasado` —se fue y no se pudo— y el motivo registrado.
+      toast.success(`Cuota marcada como atrasada: ${motivo}`);
       setAdvertenciaOpen(false);
       // Incomunicado también manda estado de cuenta: si el cliente no
       // contesta, el destinatario puede ser el garante.

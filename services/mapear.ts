@@ -181,16 +181,13 @@ export function aBooleanoNullable(v: number | null | undefined): boolean | null 
 /**
  * La API manda los tres estados de la base: Pendiente, Pagado, Atrasado.
  *
- * `Atrasado` se traduce a `Pendiente` a propósito: el front deriva "Vencido"
- * con esVencido() (pendiente + fecha pasada), que es exactamente lo que
- * significa un atrasado, y así ESTADO[...] no recibe una clave que no tiene.
- *
- * ponytail: los tres estados de la maqueta (Incomunicado, Adelanto, Recargo)
- * siguen en el tipo PagoEstado y ya no pueden llegar de la API. Sacarlos es la
- * tarea N.4 y toca componentes, no solo este archivo.
+ * `Atrasado` **ya no se traduce a `Pendiente`**. Lo pone el cobrador cuando fue
+ * y no pudo cobrar, y esa gestión es justo lo que hay que poder distinguir de
+ * una cuota vencida que nadie visitó.
  */
 export function aEstadoCuota(estado: string | null): PagoEstado {
   if (estado === "Pagado") return "Pagado";
+  if (estado === "Atrasado") return "Atrasado";
   return "Pendiente";
 }
 

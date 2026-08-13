@@ -135,6 +135,7 @@ export async function registrarAdvertencia(
   payload: RegistrarAdvertenciaPayload,
 ): Promise<void> {
   await api.post("/advertencias", {
+    id_cuota: payload.cuotaId,
     id_plan: payload.planId,
     Motivo: payload.motivo,
     Recargo: payload.recargo,
