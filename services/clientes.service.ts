@@ -83,7 +83,9 @@ export async function getClienteDetalle(clienteId: number): Promise<ClienteDetal
     // cobrador. En esta app el cobrador logueado es el asignado salvo en modo
     // asistencia, así que no vale un request extra.
     cobradorAsignadoNombre: null,
-    referentes: resEstado.data.referentes.map(aReferenteDeCliente),
+    // NO salen de /estado_cuenta: ese endpoint devuelve solo ids
+    // (`{Tipo_Referencia, ID_Referente}`), sin nombre ni teléfono.
+    referentes: await getReferentesDeCliente(clienteId),
     notas,
     estadoDeCuenta: aEstadoDeCuenta(resEstado.data, todayISO()),
   };
@@ -108,7 +110,10 @@ export async function getEstadoDeCuenta(clienteId: number): Promise<{
   return {
     estadoDeCuenta: aEstadoDeCuenta(data, todayISO()),
     telefonos: aTelefonos(data.telefonos),
-    referentes: data.referentes.map(aReferenteDeCliente),
+    // Igual que en el detalle: los de /estado_cuenta son solo ids. Acá importa
+    // especialmente, porque de esta lista salen los destinatarios del envío
+    // obligatorio del comprobante.
+    referentes: await getReferentesDeCliente(clienteId),
   };
 }
 
@@ -125,7 +130,7 @@ export async function getEstadoDeCuenta(clienteId: number): Promise<{
 export async function getReferentesDeCliente(
   clienteId: number,
 ): Promise<ReferenteDeCliente[]> {
-  const [externos, clientes] = await Promise.all([
+  const [externos, comoReferente] = await Promise.all([
     api.get<{ referentes: FilaPersona[] }>("/ref_cliente", {
       params: { id_cliente: clienteId },
     }),
@@ -134,14 +139,44 @@ export async function getReferentesDeCliente(
     }),
   ]);
 
+  // ⚠️ Ninguno de los dos endpoints de relación devuelve los teléfonos: dicen
+  // QUIÉN responde por el cliente, no cómo contactarlo. Y sin teléfono el
+  // botón de WhatsApp no sirve para nada, que es justo para lo que están acá.
+  //
+  // Los catálogos completos sí los traen, así que se cruzan por id. Se piden
+  // solo si hay a quién cruzar.
+  const [refs, clis] = await Promise.all([
+    externos.data.referentes.length
+      ? api
+          .get<{ referentes: FilaPersona[] }>("/referentes")
+          .then((r) => telefonosPorId(r.data.referentes, "id_Referentes"))
+      : Promise.resolve(new Map<number, Telefono[]>()),
+    comoReferente.data.referentes.length
+      ? api
+          .get<{ clientes: FilaCliente[] }>("/clientes")
+          .then((r) => telefonosPorId(r.data.clientes, "id_Clientes"))
+      : Promise.resolve(new Map<number, Telefono[]>()),
+  ]);
+
   return [
-    ...externos.data.referentes.map(aReferenteDeCliente),
-    // Mismo mapper pero la fila viene de `Clientes`: el tipo y el id se
-    // corrigen acá, que es lo único que cambia.
-    ...clientes.data.referentes.map((f) => ({
+    ...externos.data.referentes.map((f) => ({
+      ...aReferenteDeCliente(f),
+      telefonos: refs.get(f.id_Referentes ?? 0) ?? [],
+    })),
+    // Mismo mapper pero la fila viene de `Clientes`: cambian el tipo y el id.
+    ...comoReferente.data.referentes.map((f) => ({
       ...aReferenteDeCliente(f),
       tipo: "Cliente" as const,
-      id: f.id_Clientes ?? f.id_Referentes ?? 0,
+      id: f.id_Clientes ?? 0,
+      telefonos: clis.get(f.id_Clientes ?? 0) ?? [],
     })),
   ];
+}
+
+/** Índice id → teléfonos, para cruzar una relación con su catálogo */
+function telefonosPorId<T extends { telefonos?: string[] }>(
+  filas: T[],
+  campoId: keyof T,
+): Map<number, Telefono[]> {
+  return new Map(filas.map((f) => [Number(f[campoId]), aTelefonos(f.telefonos)]));
 }
