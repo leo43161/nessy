@@ -6,6 +6,7 @@ import {
   aReferenteDeCliente,
   aTelefonos,
   type FilaCliente,
+  type FilaPersona,
   type RespuestaEstadoCuenta,
 } from "@/services/mapear";
 import { getNotasDeCliente } from "@/services/notas.service";
@@ -109,4 +110,38 @@ export async function getEstadoDeCuenta(clienteId: number): Promise<{
     telefonos: aTelefonos(data.telefonos),
     referentes: data.referentes.map(aReferenteDeCliente),
   };
+}
+
+/**
+ * Quién responde por el cliente: garantes externos y otros clientes.
+ *
+ * Son dos endpoints porque son dos tablas distintas —`Referentes` y
+ * `Cliente_ClienteReferente`—, y el cobrador necesita las dos: cuando el
+ * cliente no atiende, llama a cualquiera de ellos.
+ *
+ * `/estado_cuenta` también los trae, pero arrastra planes y movimientos: para
+ * el modal de cobro, que solo quiere los teléfonos, es traer de más.
+ */
+export async function getReferentesDeCliente(
+  clienteId: number,
+): Promise<ReferenteDeCliente[]> {
+  const [externos, clientes] = await Promise.all([
+    api.get<{ referentes: FilaPersona[] }>("/ref_cliente", {
+      params: { id_cliente: clienteId },
+    }),
+    api.get<{ referentes: FilaPersona[] }>("/cli_cliente", {
+      params: { id_cliente: clienteId },
+    }),
+  ]);
+
+  return [
+    ...externos.data.referentes.map(aReferenteDeCliente),
+    // Mismo mapper pero la fila viene de `Clientes`: el tipo y el id se
+    // corrigen acá, que es lo único que cambia.
+    ...clientes.data.referentes.map((f) => ({
+      ...aReferenteDeCliente(f),
+      tipo: "Cliente" as const,
+      id: f.id_Clientes ?? f.id_Referentes ?? 0,
+    })),
+  ];
 }

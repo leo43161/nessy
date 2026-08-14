@@ -19,6 +19,7 @@ import { StatusBadge } from "@/components/shared/status-badge";
 import { WhatsappButton } from "@/components/shared/whatsapp-button";
 import { EstadoCuentaDialog } from "@/components/clientes/estado-cuenta-dialog";
 import { NotasCliente } from "@/components/clientes/notas-cliente";
+import { ReferentesCliente } from "@/components/clientes/referentes-cliente";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { registrarAdvertencia, registrarPago } from "@/store/slices/cobros.slice";
 import { useMetodosDePago } from "@/hooks/use-catalogos";
@@ -209,6 +210,10 @@ export function RegistroDialog({ cobro, open, onOpenChange, onVerCliente }: Regi
 
           {/* Las notas van antes de cobrar: son el contexto de la visita. */}
           <NotasCliente clienteId={cliente.id} />
+
+          {/* Plegado: el garante es el plan B. Pero está acá y no a tres
+              pantallas, que es donde estaba cuando el cliente no atiende. */}
+          <ReferentesCliente clienteId={cliente.id} plegado />
 
           {asistiendo && (
             <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[0.75rem] text-amber-800 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-200">

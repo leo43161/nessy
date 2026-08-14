@@ -93,6 +93,8 @@ export interface FilaPersona {
   id_localidad: number | null;
   id_Cobradores?: number;
   id_Referentes?: number;
+  /** /cli_cliente devuelve filas de `Clientes`, con la PK de esa tabla */
+  id_Clientes?: number;
   telefonos?: string[];
 }
 

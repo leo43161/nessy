@@ -11,7 +11,6 @@ import {
   Plus,
   ReceiptText,
   Trash2,
-  Users,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -37,7 +36,7 @@ import { InitialsAvatar } from "@/components/shared/initials-avatar";
 import { WhatsappButton } from "@/components/shared/whatsapp-button";
 import { EmptyState } from "@/components/shared/empty-state";
 import { EstadoCuentaPanel } from "@/components/clientes/estado-cuenta-panel";
-import { ReferentesDialog } from "@/components/clientes/referentes-dialog";
+import { ReferentesCliente } from "@/components/clientes/referentes-cliente";
 import { NotaFormDialog, type NotaFormTarget } from "@/components/notas/nota-form-dialog";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { fetchClienteDetalle } from "@/store/slices/clientes.slice";
@@ -57,7 +56,6 @@ export function ClienteDetailDialog({ clienteId, open, onOpenChange }: ClienteDe
   const { data, status } = useAppSelector((s) => s.clientes.detalle);
   const cargando = status === "loading" || data?.cliente.id !== clienteId;
 
-  const [referentesOpen, setReferentesOpen] = useState(false);
   const [notaTarget, setNotaTarget] = useState<NotaFormTarget | null>(null);
   const [notaOpen, setNotaOpen] = useState(false);
   const [notaAEliminar, setNotaAEliminar] = useState<Nota | null>(null);
@@ -176,18 +174,16 @@ export function ClienteDetailDialog({ clienteId, open, onOpenChange }: ClienteDe
                 )}
               </div>
 
-              {/* Acciones */}
-              <div className="grid grid-cols-3 gap-2">
+              {/* Acciones. Referentes ya no está acá: se listan abajo, con su
+                  WhatsApp a la vista, en vez de detrás de otro modal. */}
+              <div className="grid grid-cols-2 gap-2">
                 <WhatsappButton telefonos={data.telefonos}>
                   <ActionButtonShell icon={<Phone />} label="WhatsApp" disabled={data.telefonos.length === 0} />
                 </WhatsappButton>
-                <ActionButton
-                  icon={<Users />}
-                  label={`Referentes${data.referentes.length ? ` (${data.referentes.length})` : ""}`}
-                  onClick={() => setReferentesOpen(true)}
-                />
                 <ActionButton icon={<Plus />} label="Nota" onClick={abrirNuevaNota} />
               </div>
+
+              <ReferentesCliente clienteId={data.cliente.id} referentes={data.referentes} />
 
               {/* Estado de cuenta: los planes con su saldo, embebidos. Ya viene
                   en el detalle (/estado_cuenta), así que no cuesta un request. */}
@@ -257,16 +253,6 @@ export function ClienteDetailDialog({ clienteId, open, onOpenChange }: ClienteDe
         </DialogContent>
       </Dialog>
 
-      {data && (
-        <ReferentesDialog
-          referentes={data.referentes}
-          clienteId={data.cliente.id}
-          clienteNombre={data.cliente.nombreCompleto}
-          notas={data.notas}
-          open={referentesOpen}
-          onOpenChange={setReferentesOpen}
-        />
-      )}
       <NotaFormDialog
         target={notaTarget}
         open={notaOpen}
