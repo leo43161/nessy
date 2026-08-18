@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Crown, HandCoins, Target, TrendingDown, TriangleAlert } from "lucide-react";
+import { CalendarRange, Crown, HandCoins, Target, TrendingDown, TriangleAlert } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -10,6 +10,7 @@ import { fetchEstadisticas } from "@/store/slices/estadisticas.slice";
 import { cn } from "@/lib/utils";
 import { fmtMoney, fmtPct, formatFecha, todayISO } from "@/lib/format";
 import { PRESETS, rangoDePeriodo, type PeriodoId } from "@/lib/periodos";
+import { AccionesFab } from "@/components/shared/acciones-fab";
 import { Input } from "@/components/ui/input";
 import type { EstadisticasCobrador, RangoFechas } from "@/types";
 
@@ -164,7 +165,7 @@ export default function EstadisticasPage() {
       {/* Ranking de cobradores */}
       <Card className="gap-3 px-4 py-4">
         <div className="flex items-center gap-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-          <Crown className="size-4 text-orange-500" />
+          <Crown className="size-4 text-acento" />
           Ranking de Cobradores ({formatFecha(workDate)})
         </div>
         <Ranking data={data} miId={cobrador?.id} />
@@ -211,7 +212,7 @@ export default function EstadisticasPage() {
             label="Promedio diario"
             valor={fmtMoney(data.promedioDiario)}
             sub="que traés por día"
-            tone="orange"
+            tone="acento"
             big
           />
           <StatCard
@@ -224,9 +225,31 @@ export default function EstadisticasPage() {
           />
         </div>
       </div>
+
+      {/* Los mismos períodos que las pastillas de arriba, con el nombre entero.
+          Las pastillas entran cuatro por fila y se leen apretadas. */}
+      <AccionesFab
+        acciones={PRESETS.filter((p) => p.id !== "personalizado").map((preset) => ({
+          label: "Ver " + preset.label.toLowerCase(),
+          descripcion: DESCRIPCION_PERIODO[preset.id],
+          icon: <CalendarRange />,
+          onSelect: () => setPeriodo(preset.id),
+          disabled: periodo === preset.id,
+        }))}
+      />
     </div>
   );
 }
+
+/** Qué abarca cada período, en criollo. */
+const DESCRIPCION_PERIODO: Partial<Record<PeriodoId, string>> = {
+  hoy: "Solo el día de trabajo",
+  semana: "De lunes a domingo",
+  mes: "Del 1 hasta fin de mes",
+  mesPasado: "El mes anterior completo",
+  tresMeses: "Los últimos tres meses",
+  anio: "Desde el 1 de enero",
+};
 
 function Ranking({ data, miId }: { data: EstadisticasCobrador; miId?: number }) {
   const maxMonto = Math.max(1, ...data.ranking.map((r) => r.montoCobrado));
@@ -239,14 +262,14 @@ function Ranking({ data, miId }: { data: EstadisticasCobrador; miId?: number }) 
             key={r.cobradorId}
             className={cn(
               "flex items-center gap-3 rounded-lg px-2.5 py-2",
-              yo ? "bg-orange-100 dark:bg-orange-950/50" : "bg-muted/40"
+              yo ? "bg-accent" : "bg-muted/40"
             )}
           >
             <span
               className={cn(
                 "flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-bold",
                 r.puesto === 1
-                  ? "bg-orange-500 text-white"
+                  ? "bg-acento text-white"
                   : "bg-background text-muted-foreground"
               )}
             >
@@ -255,11 +278,11 @@ function Ranking({ data, miId }: { data: EstadisticasCobrador; miId?: number }) 
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5 text-sm font-semibold">
                 <span className="truncate">{r.nombre.split(" ")[0]}</span>
-                {yo && <span className="text-[0.62rem] text-orange-600 dark:text-orange-400">(vos)</span>}
+                {yo && <span className="text-xs font-bold text-acento">(vos)</span>}
               </div>
               <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-background">
                 <div
-                  className="h-full rounded-full bg-gradient-to-r from-orange-400 to-orange-600"
+                  className="h-full rounded-full bg-linear-to-r from-acento to-primary"
                   style={{ width: `${(r.montoCobrado / maxMonto) * 100}%` }}
                 />
               </div>
@@ -281,7 +304,7 @@ const TONES = {
   green: "text-green-600 dark:text-green-400",
   blue: "text-blue-600 dark:text-blue-400",
   red: "text-red-600 dark:text-red-400",
-  orange: "text-orange-600 dark:text-orange-400",
+  acento: "text-acento",
   muted: "text-foreground",
 };
 

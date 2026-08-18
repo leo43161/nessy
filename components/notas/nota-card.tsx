@@ -13,7 +13,7 @@ interface NotaCardProps {
 
 export function NotaCard({ nota, onEdit, onDelete }: NotaCardProps) {
   return (
-    <div className="rounded-xl border border-l-4 border-l-orange-300 bg-card px-4 py-3.5 shadow-sm dark:border-l-orange-700">
+    <div className="rounded-xl border border-l-4 border-l-acento bg-card px-4 py-3.5 shadow-sm">
       <div className="mb-1 text-xs font-semibold text-primary">{nota.clienteNombre}</div>
       <p className="text-sm leading-relaxed whitespace-pre-wrap text-foreground">{nota.nota}</p>
       <div className="mt-2 flex items-center justify-between">

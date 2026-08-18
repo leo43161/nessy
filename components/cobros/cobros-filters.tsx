@@ -64,7 +64,7 @@ export function CobrosFilters({ value, onChange, todosLabel = "Todos los cobrado
           className={cn(
             "flex h-9 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-xs font-semibold transition-colors",
             value.todosCobradores
-              ? "border-orange-500 bg-orange-500 text-white"
+              ? "border-primary bg-primary text-primary-foreground"
               : "bg-card text-muted-foreground hover:text-foreground"
           )}
           title="Ver cobros de todos los cobradores para asistir"

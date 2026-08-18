@@ -1,11 +1,11 @@
 import { fmtMoney, formatFecha } from "@/lib/format";
-import { APP_NAME } from "@/lib/constants";
+import { EMPRESA_NOMBRE } from "@/lib/marca";
 import type { EstadoDeCuenta } from "@/types";
 
 /** Arma el estado de cuenta como texto plano para compartir (WhatsApp, etc.) */
 export function estadoDeCuentaToText(ec: EstadoDeCuenta): string {
   const lineas: string[] = [];
-  lineas.push(`*${APP_NAME} — Estado de Cuenta*`);
+  lineas.push(`*${EMPRESA_NOMBRE} — Estado de Cuenta*`);
   lineas.push(`Cliente: ${ec.clienteNombre}`);
   lineas.push(`Fecha: ${formatFecha(ec.generadoEl)}`);
   lineas.push("");

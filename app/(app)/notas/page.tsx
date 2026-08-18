@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { NotebookPen, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -16,12 +18,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { NotaCard } from "@/components/notas/nota-card";
 import { NotaFormDialog, type NotaFormTarget } from "@/components/notas/nota-form-dialog";
 import { EmptyState } from "@/components/shared/empty-state";
+import { AccionesFab } from "@/components/shared/acciones-fab";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { deleteNota, fetchNotas } from "@/store/slices/notas.slice";
 import type { NotaConCliente } from "@/services/notas.service";
 
 export default function NotasPage() {
   const dispatch = useAppDispatch();
+  const router = useRouter();
   const cobrador = useAppSelector((s) => s.auth.cobrador);
   const { items, status, error } = useAppSelector((s) => s.notas);
 
@@ -86,6 +90,28 @@ export default function NotasPage() {
           ))}
         </div>
       )}
+
+      {/* Las notas nacen desde la ficha del cliente, no desde acá: cuelgan de
+          un cliente. Por eso el atajo lleva a la lista de clientes en vez de
+          abrir un formulario que no sabría de quién es la nota. */}
+      <AccionesFab
+        acciones={[
+          {
+            label: "Escribir una nota nueva",
+            descripcion: "Te lleva a elegir de qué cliente es",
+            icon: <NotebookPen />,
+            onSelect: () => router.push("/clientes"),
+          },
+          {
+            label: "Actualizar la lista",
+            descripcion: "Vuelve a traer las notas del servidor",
+            icon: <RefreshCw />,
+            onSelect: () => cobrador && dispatch(fetchNotas(cobrador.id)),
+            disabled: !cobrador,
+            separar: true,
+          },
+        ]}
+      />
 
       <NotaFormDialog
         target={notaTarget}

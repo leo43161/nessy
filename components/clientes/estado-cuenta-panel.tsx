@@ -49,6 +49,14 @@ export function EstadoCuentaPanel({
 }: EstadoCuentaPanelProps) {
   const [enviando, setEnviando] = useState(false);
   const [destinatarioIdx, setDestinatarioIdx] = useState(0);
+  /**
+   * Qué plan se manda. `undefined` = toda la cuenta, que es lo de siempre.
+   *
+   * Un cliente con tres planes recibía un PDF con los tres y no entendía cuál
+   * le estaban reclamando. No hace falta ningún endpoint nuevo:
+   * `/estado_cuenta` ya viene desglosado por plan.
+   */
+  const [planId, setPlanId] = useState<number | undefined>(undefined);
 
   const texto = estadoDeCuentaToText(data);
 
@@ -81,7 +89,7 @@ export function EstadoCuentaPanel({
 
   const generarPdf = async () => {
     const { archivoEstadoCuentaPdf } = await import("@/lib/pdf/estado-cuenta-pdf");
-    return archivoEstadoCuentaPdf(data, cliente);
+    return archivoEstadoCuentaPdf(data, cliente, undefined, planId);
   };
 
   const descargarPdf = async () => {
@@ -152,6 +160,29 @@ export function EstadoCuentaPanel({
         )}
       </div>
 
+      {/* Con un solo plan no hay nada que elegir: el PDF ya es ese plan. */}
+      {data.planes.length > 1 && (
+        <div className="space-y-1">
+          <label htmlFor="plan-del-pdf" className="text-sm font-semibold">
+            Qué se manda en el PDF
+          </label>
+          <select
+            id="plan-del-pdf"
+            value={planId ?? ""}
+            onChange={(e) => setPlanId(e.target.value === "" ? undefined : Number(e.target.value))}
+            disabled={enviando}
+            className="h-11 w-full rounded-md border border-input bg-transparent px-3 text-base shadow-xs disabled:opacity-50"
+          >
+            <option value="">Toda la cuenta ({data.planes.length} planes)</option>
+            {data.planes.map((plan) => (
+              <option key={plan.planId} value={plan.planId}>
+                Solo {plan.nombre} — {fmtMoney(plan.pendiente)} pendiente
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
       {destinatarios.length > 1 && (
         <div className="space-y-1">
           <select
@@ -159,7 +190,7 @@ export function EstadoCuentaPanel({
             value={destinatarioIdx}
             onChange={(e) => setDestinatarioIdx(Number(e.target.value))}
             disabled={enviando}
-            className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs disabled:opacity-50"
+            className="h-11 w-full rounded-md border border-input bg-transparent px-3 text-base shadow-xs disabled:opacity-50"
           >
             {destinatarios.map((d, i) => (
               <option key={d.numero} value={i}>
