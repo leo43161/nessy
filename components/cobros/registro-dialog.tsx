@@ -26,6 +26,7 @@ import { useMetodosDePago } from "@/hooks/use-catalogos";
 import { marcarWhatsAppEnviado } from "@/services/cobros.service";
 import { obtenerUbicacion, type ResultadoUbicacion } from "@/lib/geo";
 import { fmtMoney, formatFecha, mapaUrl } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import {
   esVencido,
   MOTIVOS_ADVERTENCIA,
@@ -62,6 +63,15 @@ export function RegistroDialog({ cobro, open, onOpenChange, onVerCliente }: Regi
   const [advertenciaOpen, setAdvertenciaOpen] = useState(false);
   const [nuevaFecha, setNuevaFecha] = useState("");
   const [motivo, setMotivo] = useState(MOTIVOS_ADVERTENCIA[0]);
+
+  /**
+   * Cobro adelantado: de dónde sale el sobrante.
+   *
+   * `false` —el final del plan— es el default porque es lo único que el
+   * sistema hizo hasta ahora. Un cobrador que no mire esta opción registra el
+   * cobro exactamente como se registraba antes.
+   */
+  const [desdeLaProxima, setDesdeLaProxima] = useState(false);
 
   // El monto y el método se DERIVAN mientras el cobrador no los toque, en vez
   // de sincronizarse con un efecto: null significa "todavía no lo cambió".
@@ -106,6 +116,7 @@ export function RegistroDialog({ cobro, open, onOpenChange, onVerCliente }: Regi
       setMontoEditado(null);
       setMetodoElegido(null);
       setNuevaFecha("");
+      setDesdeLaProxima(false);
     }
     onOpenChange(abierto);
   };
@@ -147,6 +158,7 @@ export function RegistroDialog({ cobro, open, onOpenChange, onVerCliente }: Regi
         monto: montoNum,
         idMetodoDePago: idMetodo,
         nuevaFecha: tipo === "parcial" ? nuevaFecha : undefined,
+        desdeLaProxima: tipo === "adelantado" ? desdeLaProxima : undefined,
         cobradorId: cobrador.id,
         lat: ubicacion.ubicacion.lat,
         lon: ubicacion.ubicacion.lon,
@@ -285,13 +297,37 @@ export function RegistroDialog({ cobro, open, onOpenChange, onVerCliente }: Regi
                 />
                 {/* El tipo no se elige: lo deduce la API del monto. Se muestra
                     para que el cobrador vea qué va a pasar antes de confirmar. */}
-                <p className="text-xs text-muted-foreground">
+                <p className="text-sm text-muted-foreground">
                   {montoNum > 0 ? TIPO_DE_COBRO_LABEL[tipo] : "Ingresá cuánto entró"}
-                  {tipo === "adelantado" && montoNum > 0 && (
-                    <> · el sobrante de {fmtMoney(montoNum - cobro.montoEsperado)} cancela cuotas futuras</>
-                  )}
                 </p>
               </div>
+
+              {/* Pagó de más: hay que elegir de dónde sale el sobrante, porque
+                  las dos opciones NO hacen lo mismo. Una le acorta el plan y la
+                  otra le libera las semanas que vienen. Por eso están escritas
+                  con la consecuencia, no con el nombre técnico. */}
+              {tipo === "adelantado" && montoNum > 0 && (
+                <div className="space-y-2 rounded-lg border border-input bg-card p-3">
+                  <div className="text-sm font-semibold">
+                    Sobran {fmtMoney(montoNum - cobro.montoEsperado)}. ¿De dónde los descontamos?
+                  </div>
+
+                  <OpcionSobrante
+                    activa={!desdeLaProxima}
+                    onClick={() => setDesdeLaProxima(false)}
+                    titulo="De las últimas cuotas"
+                    detalle="Termina de pagar antes. Las próximas semanas sigue pagando igual."
+                    disabled={registrando}
+                  />
+                  <OpcionSobrante
+                    activa={desdeLaProxima}
+                    onClick={() => setDesdeLaProxima(true)}
+                    titulo="De las próximas cuotas"
+                    detalle="Se saltea las semanas que vienen. El plan termina en la misma fecha."
+                    disabled={registrando}
+                  />
+                </div>
+              )}
 
               <div className="space-y-1.5">
                 <Label htmlFor="metodo">Método de pago</Label>
@@ -558,5 +594,44 @@ function EstadoUbicacion({
         Reintentar ubicación
       </Button>
     </div>
+  );
+}
+
+/**
+ * Una de las dos opciones del sobrante.
+ *
+ * Botón grande con el título y la consecuencia, no un radio chiquito: la
+ * diferencia entre las dos no está en el nombre —las dos "descuentan cuotas"—
+ * sino en qué le pasa al cliente después, y eso hay que poder leerlo.
+ */
+function OpcionSobrante({
+  activa,
+  onClick,
+  titulo,
+  detalle,
+  disabled,
+}: {
+  activa: boolean;
+  onClick: () => void;
+  titulo: string;
+  detalle: string;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-pressed={activa}
+      className={cn(
+        "flex w-full flex-col gap-0.5 rounded-lg border-2 px-3 py-2.5 text-left transition-colors disabled:opacity-50",
+        activa
+          ? "border-primary bg-accent text-accent-foreground"
+          : "border-input hover:bg-muted",
+      )}
+    >
+      <span className="text-base font-semibold">{titulo}</span>
+      <span className="text-sm text-muted-foreground">{detalle}</span>
+    </button>
   );
 }

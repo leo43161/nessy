@@ -108,6 +108,10 @@ export async function registrarPago(payload: RegistrarPagoPayload): Promise<Cobr
     // El SP del cobro parcial crea una cuota nueva por la diferencia con esta
     // fecha; en los otros dos casos la API lo ignora.
     nueva_fecha: payload.nuevaFecha,
+    // Solo lo mira la API cuando el monto es mayor al esperado. Sin el campo,
+    // el sobrante come el final del plan, que es como funcionaba antes de que
+    // el SP tuviera el parámetro.
+    desde_la_proxima: payload.desdeLaProxima,
     concepto: payload.concepto,
     // Sin ubicación la API responde sin_ubicacion:true y deja Dentro_Rango en
     // 0. Nunca rechaza el cobro por eso (N.5).
