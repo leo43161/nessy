@@ -7,7 +7,8 @@ import {
   type FilaPersona,
 } from "@/services/mapear";
 import { addDays } from "@/lib/format";
-import { VENTANA_FUTURO, VENTANA_PASADO } from "@/lib/constants";
+import { esTrabajoDelDia } from "@/lib/status";
+import { VENTANA_PASADO } from "@/lib/constants";
 import type {
   ClienteListado,
   CobroDelDia,
@@ -17,8 +18,8 @@ import type {
 } from "@/types";
 
 /**
- * Worklist de cobros del cobrador para la fecha de trabajo (ventana de días
- * alrededor de esa fecha). cobrador null = todos (modo asistencia).
+ * Worklist de cobros del cobrador para la fecha de trabajo.
+ * cobrador null = todos (modo asistencia).
  */
 export async function getCobrosDia(filtro: FiltroCobros): Promise<CobroDelDia[]> {
   // OJO: no es `/cobros`. Ese endpoint devuelve los cobros ya *hechos*
@@ -30,7 +31,7 @@ export async function getCobrosDia(filtro: FiltroCobros): Promise<CobroDelDia[]>
   // para el modo asistencia de un admin.
   const rango = {
     desde: addDays(-VENTANA_PASADO, filtro.fecha),
-    hasta: addDays(VENTANA_FUTURO, filtro.fecha),
+    hasta: filtro.fecha,
   };
 
   const [res, ctx] = await Promise.all([
@@ -40,6 +41,8 @@ export async function getCobrosDia(filtro: FiltroCobros): Promise<CobroDelDia[]>
 
   return res.data.cuotas
     .map((f) => aCuota(f, ctx.clientes, ctx.cobradores))
+    // Lo del día elegido más lo que quedó debiendo de antes. Nada del futuro.
+    .filter((c) => esTrabajoDelDia(c.estado, c.fechaAcordada, filtro.fecha))
     .filter((c) => filtro.cobradorId == null || c.cobradorAsignadoId === filtro.cobradorId)
     .filter((c) => filtro.localidadId == null || c.cliente.idLocalidad === filtro.localidadId);
 }

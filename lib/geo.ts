@@ -5,16 +5,15 @@
  * `Clientes.ubicacion_geografica_de_destino_de_cobro` con ST_Distance_Sphere y
  * marcan `Dentro_Rango = 1` si el cobro se hizo a ≤ 2 km del domicilio.
  *
- * ⚠️ **Ahora la ubicación es obligatoria para cobrar** (pedido del cliente:
- * "el sistema te tiene que obligar a tener la ubicación prendida"). Antes
- * cualquier fallo se resolvía en `null` y el cobro se registraba igual con
- * `Dentro_Rango = 0`, así que el control de cercanía no servía para nada: un
- * cobrador con el GPS apagado quedaba idéntico a uno que cobró lejos.
+ * **Lo que se exige para cobrar es que la ubicación esté ACTIVA, no que se
+ * haya podido fijar la posición.** El pedido del cliente fue "que el sistema
+ * te obligue a tener la ubicación prendida"; bloquear además por señal
+ * convertía un problema del GPS en un cobro que no se podía registrar con el
+ * cliente enfrente pagando.
  *
- * Por eso esto ya no devuelve `null` a secas: devuelve **por qué** falló, para
- * que la pantalla pueda decir qué hacer y ofrecer reintentar. Un permiso
- * denegado se arregla distinto que un GPS sin señal, y el cobrador está
- * parado frente al cliente.
+ * Por eso esto no devuelve `null` a secas: devuelve **por qué** falló, y
+ * `bloqueaElCobro()` separa las dos cosas. Un permiso denegado se arregla
+ * (tocar el candado y permitir); un GPS sin señal, no.
  */
 
 export interface Ubicacion {
@@ -44,9 +43,24 @@ const MENSAJES: Record<MotivoSinUbicacion, string> = {
   "no-soportado": "Este navegador no puede dar la ubicación. Abrí la app desde Chrome.",
   denegado:
     "Diste que no a la ubicación. Tocá el candado al lado de la dirección, permití Ubicación y reintentá.",
-  "sin-senal": "No se pudo tomar la ubicación. Fijate que el GPS del celular esté prendido.",
-  demoro: "La ubicación está tardando. Salí a un lugar más abierto y reintentá.",
+  "sin-senal": "No se pudo fijar la posición. Podés cobrar igual: el cobro va a quedar sin ubicación.",
+  demoro: "La ubicación está tardando. Podés cobrar igual: el cobro va a quedar sin ubicación.",
 };
+
+/**
+ * ¿Este fallo impide cobrar?
+ *
+ * Solo los dos que significan "la ubicación NO está activa": el permiso
+ * denegado y el navegador que no la soporta. Esos dependen del cobrador y se
+ * arreglan tocando el candado.
+ *
+ * `sin-senal` y `demoro` **no** bloquean: la ubicación está prendida y el
+ * problema es del GPS. El cobro se registra con `Dentro_Rango = 0`, que es
+ * exactamente lo que significa: no se pudo verificar la cercanía.
+ */
+export function bloqueaElCobro(estado: ResultadoUbicacion): boolean {
+  return !estado.ok && (estado.motivo === "denegado" || estado.motivo === "no-soportado");
+}
 
 /**
  * Más que esto y el cobrador espera de gusto. Es más largo que antes (8 s)

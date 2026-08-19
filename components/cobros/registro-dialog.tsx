@@ -24,7 +24,7 @@ import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { registrarAdvertencia, registrarPago } from "@/store/slices/cobros.slice";
 import { useMetodosDePago } from "@/hooks/use-catalogos";
 import { marcarWhatsAppEnviado } from "@/services/cobros.service";
-import { obtenerUbicacion, type ResultadoUbicacion } from "@/lib/geo";
+import { bloqueaElCobro, obtenerUbicacion, type ResultadoUbicacion } from "@/lib/geo";
 import { fmtMoney, formatFecha, mapaUrl } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import {
@@ -60,6 +60,16 @@ export function RegistroDialog({ cobro, open, onOpenChange, onVerCliente }: Regi
   // Cerrada la visita —se cobró o quedó la advertencia— el estado de cuenta
   // deja de ser opcional: el diálogo no se cierra hasta que lo mande.
   const [estadoCuentaObligatorio, setEstadoCuentaObligatorio] = useState(false);
+  /**
+   * Si al mandar el estado de cuenta hay que marcar `WhatsApp_Enviado`.
+   *
+   * Solo después de COBRAR, donde ese mensaje es el comprobante. Después de un
+   * "no pude cobrar" NO: el admin lee esa columna como "reclamo realizado", y
+   * el reclamo es una acción suya —el botón «Reclamar» del tablero—, no del
+   * cobrador. Marcándola acá, una cuota recién marcada atrasada le aparecía al
+   * admin como ya reclamada y nadie la reclamaba nunca.
+   */
+  const [marcarComprobante, setMarcarComprobante] = useState(false);
   const [advertenciaOpen, setAdvertenciaOpen] = useState(false);
   const [nuevaFecha, setNuevaFecha] = useState("");
   const [motivo, setMotivo] = useState(MOTIVOS_ADVERTENCIA[0]);
@@ -133,20 +143,22 @@ export function RegistroDialog({ cobro, open, onOpenChange, onVerCliente }: Regi
     montoNum > 0 &&
     idMetodo > 0 &&
     (tipo !== "parcial" || nuevaFecha !== "") &&
-    // Sin ubicación no se cobra: es el pedido del cliente y es lo que hace que
-    // `Dentro_Rango` signifique algo. La advertencia (no se pudo cobrar) sí
-    // sigue disponible, así que la visita nunca queda sin registrar.
-    ubicacion?.ok === true;
+    // Lo que se exige es que la ubicación esté PRENDIDA, no que el GPS haya
+    // conseguido fijar la posición: con el permiso dado y sin señal el cobro
+    // sale igual y queda con `Dentro_Rango = 0`. Bloquear por señal dejaba al
+    // cobrador sin poder registrar, con el cliente enfrente pagando.
+    ubicacion !== null &&
+    !bloqueaElCobro(ubicacion);
   // Asistencia: el cobrador logueado no es el asignado → se marcará fuera de rango
   const asistiendo = cobrador.id !== cobro.cobradorAsignadoId;
   const mensajeDemora = `Hola ${cliente.nombreCompleto.split(" ")[0]}! Te recordamos la cuota pendiente de ${fmtMoney(cobro.montoEsperado)} (${formatFecha(cobro.fechaAcordada)}). ¿Coordinamos el pago?`;
 
   const registrar = async () => {
-    // El botón ya está deshabilitado sin ubicación, pero se vuelve a mirar acá:
-    // es la última puerta antes de mandar el cobro, y `puedeCobrar` es una
-    // condición de UI que mañana puede cambiar sin que nadie se acuerde de esto.
-    if (!ubicacion?.ok) {
-      toast.error(ubicacion?.mensaje ?? "Falta la ubicación para poder cobrar.");
+    // El botón ya está deshabilitado, pero se vuelve a mirar acá: es la última
+    // puerta antes de mandar el cobro, y `puedeCobrar` es una condición de UI
+    // que mañana puede cambiar sin que nadie se acuerde de esto.
+    if (ubicacion === null || bloqueaElCobro(ubicacion)) {
+      toast.error(ubicacion?.ok === false ? ubicacion.mensaje : "Tomando la ubicación…");
       return;
     }
 
@@ -160,15 +172,19 @@ export function RegistroDialog({ cobro, open, onOpenChange, onVerCliente }: Regi
         nuevaFecha: tipo === "parcial" ? nuevaFecha : undefined,
         desdeLaProxima: tipo === "adelantado" ? desdeLaProxima : undefined,
         cobradorId: cobrador.id,
-        lat: ubicacion.ubicacion.lat,
-        lon: ubicacion.ubicacion.lon,
+        // Sin posición van en null: la API responde `sin_ubicacion: true` y
+        // deja `Dentro_Rango = 0`. Nunca rechaza el cobro por eso.
+        lat: ubicacion.ok ? ubicacion.ubicacion.lat : null,
+        lon: ubicacion.ok ? ubicacion.ubicacion.lon : null,
       }),
     );
     setRegistrando(false);
 
     if (registrarPago.fulfilled.match(result)) {
       toast.success(`${cliente.nombreCompleto}: ${fmtMoney(montoNum)} cobrados`);
-      // Tras cobrar, el estado de cuenta es obligatorio: es el comprobante.
+      // Tras cobrar, el estado de cuenta es obligatorio: es el comprobante, y
+      // por eso este es el único caso que deja registrado que se mandó.
+      setMarcarComprobante(true);
       setEstadoCuentaObligatorio(true);
       setEstadoCuentaOpen(true);
     } else {
@@ -191,7 +207,9 @@ export function RegistroDialog({ cobro, open, onOpenChange, onVerCliente }: Regi
       toast.success(`Cuota marcada como atrasada: ${motivo}`);
       setAdvertenciaOpen(false);
       // Incomunicado también manda estado de cuenta: si el cliente no
-      // contesta, el destinatario puede ser el garante.
+      // contesta, el destinatario puede ser el garante. Pero NO se marca
+      // `WhatsApp_Enviado`: eso es el reclamo del admin, no esto.
+      setMarcarComprobante(false);
       setEstadoCuentaObligatorio(true);
       setEstadoCuentaOpen(true);
     } else {
@@ -481,8 +499,11 @@ export function RegistroDialog({ cobro, open, onOpenChange, onVerCliente }: Regi
           if (!o && estadoCuentaObligatorio) {
             // En modo obligatorio la única forma de cerrar es enviando: ni la
             // cruz, ni Escape, ni el click afuera lo cierran. Así que llegar
-            // acá **es** el envío, y se deja registrado en la cuota.
-            marcarWhatsAppEnviado(cobro.id);
+            // acá **es** el envío. Solo se deja registrado en la cuota cuando
+            // ese envío fue el comprobante de un cobro: la columna
+            // `WhatsApp_Enviado` es la que el admin lee como reclamo.
+            if (marcarComprobante) marcarWhatsAppEnviado(cobro.id);
+            setMarcarComprobante(false);
             setEstadoCuentaObligatorio(false);
             // La visita terminó: se cierra el registro. Vía `cerrar` y no
             // `onOpenChange` para que se olviden el monto y la fecha tipeados,
@@ -579,15 +600,30 @@ function EstadoUbicacion({
     );
   }
 
+  // Dos situaciones distintas: la ubicación apagada (hay que prenderla) y la
+  // ubicación prendida que no llega a fijar la posición (se cobra igual).
+  const bloquea = bloqueaElCobro(estado);
+
   return (
-    <div className="space-y-2 rounded-lg bg-destructive/10 px-3 py-2.5">
-      <div className="flex items-start gap-2 text-sm font-semibold text-destructive">
+    <div
+      className={cn(
+        "space-y-2 rounded-lg px-3 py-2.5",
+        bloquea ? "bg-destructive/10" : "bg-amber-50 dark:bg-amber-950/50",
+      )}
+    >
+      <div
+        className={cn(
+          "flex items-start gap-2 text-sm font-semibold",
+          bloquea ? "text-destructive" : "text-amber-800 dark:text-amber-200",
+        )}
+      >
         <MapPin className="mt-0.5 size-4 shrink-0" />
         <span>{estado.mensaje}</span>
       </div>
       <p className="text-xs text-muted-foreground">
-        Sin ubicación no se puede registrar el cobro. Si el cliente no paga, usá
-        &laquo;No pude cobrar&raquo;.
+        {bloquea
+          ? "Con la ubicación apagada no se puede registrar el cobro. Si el cliente no paga, usá «No pude cobrar»."
+          : "El cobro queda registrado sin verificar la cercanía al domicilio."}
       </p>
       <Button variant="outline" size="sm" className="w-full" onClick={onReintentar}>
         <RotateCw />

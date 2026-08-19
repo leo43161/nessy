@@ -5,7 +5,7 @@
 // adelantado) y, en el caso parcial, que se cree una cuota nueva por la
 // diferencia. Un error acá no rompe la pantalla: cobra mal.
 import assert from "node:assert/strict";
-import { esCobrado, esDeuda, esVencido, tipoDeCobro } from "./status.ts";
+import { esCobrado, esDeuda, esTrabajoDelDia, esVencido, tipoDeCobro } from "./status.ts";
 
 const ESPERADO = 75000;
 
@@ -55,5 +55,36 @@ assert.equal(esDeuda("Pagado", "2026-07-01", "2026-08-05"), false);
 
 // Una atrasada tampoco cuenta como cobrada, por más gestión que haya habido.
 assert.equal(esCobrado("Atrasado"), false);
+
+// ── Qué entra en la lista del día ────────────────────────────────────────
+//
+// El caso reportado: plan semanal de 5 cuotas arrancando el 19/08. Parado en
+// el 19 tienen que verse SOLO las del 19; parado en el 26, la del 26 más lo
+// que quedó debiendo del 19.
+const DIA = "2026-08-19";
+
+assert.equal(esTrabajoDelDia("Pendiente", "2026-08-19", DIA), true, "la del día va");
+assert.equal(esTrabajoDelDia("Pagado", "2026-08-19", DIA), true, "la del día ya cobrada también");
+assert.equal(esTrabajoDelDia("Pendiente", "2026-08-26", DIA), false, "la que todavía no vence, no");
+
+// El día siguiente: la que se cobró el 19 desaparece, la que no se cobró queda.
+assert.equal(
+  esTrabajoDelDia("Pagado", "2026-08-19", "2026-08-20"),
+  false,
+  "una cobrada no vuelve a aparecer al día siguiente",
+);
+assert.equal(
+  esTrabajoDelDia("Pendiente", "2026-08-19", "2026-08-20"),
+  true,
+  "una sin cobrar sigue estando: es lo que hay que ir a buscar",
+);
+assert.equal(
+  esTrabajoDelDia("Atrasado", "2026-08-19", "2026-08-20"),
+  true,
+  "una visitada sin éxito también sigue siendo deuda",
+);
+
+// Y volviendo al 19 con el calendario, la cobrada tiene que volver a verse.
+assert.equal(esTrabajoDelDia("Pagado", "2026-08-19", "2026-08-19"), true);
 
 console.log("✓ status.ts OK");

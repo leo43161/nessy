@@ -112,6 +112,29 @@ export function esDeuda(estado: PagoEstado, fechaAcordada: string, hoy: string):
   return estado === "Atrasado" || esVencido(estado, fechaAcordada, hoy);
 }
 
+/**
+ * Qué se muestra un día en la lista del cobrador: **lo de ese día, más lo que
+ * quedó debiendo de antes**.
+ *
+ * Las tres partes importan, y las tres salieron de lo que reportó el cliente:
+ *
+ *  · Las cuotas de la fecha elegida van todas, cobradas o no. Poniendo el 19
+ *    en el calendario se ve el 19 completo, incluido lo que ya se cobró.
+ *  · Del pasado van solo las que siguen sin cobrar. Una cuota del 19 ya
+ *    cobrada NO tiene que seguir apareciendo el 20.
+ *  · Del futuro no va nada. Un plan semanal que arrancaba el 19 mostraba
+ *    también el 26, y parado en el 26 aparecían tres.
+ */
+export function esTrabajoDelDia(
+  estado: PagoEstado,
+  fechaAcordada: string,
+  fecha: string,
+): boolean {
+  if (fechaAcordada > fecha) return false;
+  if (fechaAcordada === fecha) return true;
+  return !esCobrado(estado);
+}
+
 export const CLIENTE_BORDER: Record<ClienteStatus, string> = {
   Activo: "border-l-green-500",
   Inactivo: "border-l-muted-foreground/40",

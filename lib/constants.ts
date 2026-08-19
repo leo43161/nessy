@@ -5,11 +5,18 @@ export const USER_KEY = "gc_user";
 export const WORKDATE_KEY = "gc_workdate";
 
 /**
- * Ventana del worklist: cuántos días hacia atrás y hacia adelante de la fecha
- * de trabajo se le muestran al cobrador.
+ * Cuántos días hacia atrás de la fecha de trabajo se traen cuotas.
  *
- * Hacia atrás más que hacia adelante a propósito: lo vencido es lo que hay que
- * ir a buscar, y lo que todavía no venció puede esperar.
+ * Solo hacia atrás: la lista del día es **el día elegido más lo que quedó
+ * debiendo de antes**. Nada del futuro.
+ *
+ * Antes eran 10 días para atrás y 8 para adelante, sin filtrar después: un
+ * plan semanal mostraba la cuota de la semana que viene junto con la de hoy
+ * (el 19 aparecían el 19 y el 26; parado en el 26 aparecían tres). Una cuota
+ * que todavía no venció no es trabajo de hoy.
+ *
+ * 60 días y no 10 para que una deuda vieja siga a la vista: es la que hay que
+ * ir a buscar. Lo ya cobrado de días anteriores se filtra aparte, en
+ * `getCobrosDia`.
  */
-export const VENTANA_PASADO = 10;
-export const VENTANA_FUTURO = 8;
+export const VENTANA_PASADO = 60;

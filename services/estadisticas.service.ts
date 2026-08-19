@@ -1,7 +1,7 @@
 import { getHistorico } from "@/services/cobros.service";
 import { getCobradores } from "@/services/cobradores.service";
 import { addDays, todayISO } from "@/lib/format";
-import { VENTANA_FUTURO, VENTANA_PASADO } from "@/lib/constants";
+import { VENTANA_PASADO } from "@/lib/constants";
 import { esCobrado, esVencido } from "@/lib/status";
 import type { CobroDelDia, EstadisticasCobrador, RangoFechas, RankingCobrador } from "@/types";
 
@@ -106,6 +106,9 @@ function enPeriodo(
   rango?: RangoFechas,
 ): CobroDelDia[] {
   const lo = rango ? rango.desde : addDays(-VENTANA_PASADO, fecha);
-  const hi = rango ? rango.hasta : addDays(VENTANA_FUTURO, fecha);
+  // Sin rango, la misma ventana que la lista del día: hasta la fecha de
+  // trabajo y ni un día más. Antes llegaba 8 días al futuro y el desempeño
+  // del día contaba cuotas que todavía no habían vencido.
+  const hi = rango ? rango.hasta : fecha;
   return cobros.filter((c) => c.fechaAcordada >= lo && c.fechaAcordada <= hi);
 }
