@@ -31,6 +31,11 @@ interface EstadoCuentaDialogProps {
    * estado de cuenta. Es el caso de después de cobrar y de la advertencia.
    */
   obligatorio?: boolean;
+  /**
+   * El plan que se está tocando: el del cobro recién registrado o el de la
+   * cuota que se marcó atrasada. Fija el PDF a esa financiación.
+   */
+  planEnContexto?: number;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
@@ -41,6 +46,7 @@ export function EstadoCuentaDialog({
   telefonos,
   cliente,
   obligatorio = false,
+  planEnContexto,
   open,
   onOpenChange,
 }: EstadoCuentaDialogProps) {
@@ -62,6 +68,7 @@ export function EstadoCuentaDialog({
             telefonosIniciales={telefonos}
             cliente={cliente}
             obligatorio={obligatorio}
+            planEnContexto={planEnContexto}
             onCerrar={() => onOpenChange(false)}
           />
         )}
@@ -75,12 +82,14 @@ function EstadoCuentaContent({
   telefonosIniciales,
   cliente,
   obligatorio,
+  planEnContexto,
   onCerrar,
 }: {
   clienteId: number;
   telefonosIniciales: Telefono[];
   cliente: EstadoCuentaPdfCliente;
   obligatorio: boolean;
+  planEnContexto?: number;
   onCerrar: () => void;
 }) {
   const [data, setData] = useState<EstadoDeCuenta | null>(null);
@@ -143,6 +152,7 @@ function EstadoCuentaContent({
             telefonos={telefonos}
             referentes={referentes}
             onEnviado={obligatorio ? onCerrar : undefined}
+            planEnContexto={planEnContexto}
           />
 
           {!obligatorio && (

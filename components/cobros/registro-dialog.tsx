@@ -493,6 +493,13 @@ export function RegistroDialog({ cobro, open, onOpenChange, onVerCliente }: Regi
           localidadNombre: cliente.localidadNombre,
         }}
         obligatorio={estadoCuentaObligatorio}
+        // El comprobante es SIEMPRE del plan de esta cuota, se llegue por un
+        // cobro, por una advertencia o por el botón de acá abajo. El cobrador
+        // no elige entre las financiaciones del cliente: con la lista completa
+        // terminaba mandando el comprobante de otra, y el cliente recibía por
+        // escrito un saldo que no tenía nada que ver con lo que acababa de
+        // pasar. Para mandar el de otro plan está la ficha del cliente.
+        planEnContexto={cobro.planId}
         open={estadoCuentaOpen}
         onOpenChange={(o) => {
           setEstadoCuentaOpen(o);

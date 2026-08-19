@@ -28,6 +28,23 @@ interface EstadoCuentaPanelProps {
    * diálogo que lo contiene recién ahí se deje cerrar.
    */
   onEnviado?: () => void;
+  /**
+   * El plan que se está tocando en este momento: el del cobro que se acaba de
+   * registrar, o el de la cuota que se marcó atrasada.
+   *
+   * Cuando viene, el PDF sale de ESE plan y no se puede elegir otro. Es lo que
+   * pidió el cliente y es lo correcto: el comprobante de un cobro es del plan
+   * que se cobró. Con la lista completa, un cobrador apurado mandaba el
+   * comprobante de una financiación que no era la que acababa de tocar, y el
+   * cliente recibía por escrito un saldo que no tenía nada que ver.
+   *
+   * Sigue pudiendo mandar la cuenta entera —a veces el cliente la pide— pero
+   * son dos opciones, no una lista de planes.
+   *
+   * Sin esta prop (la ficha del cliente) se eligen todos, que es donde tiene
+   * sentido elegir.
+   */
+  planEnContexto?: number;
 }
 
 interface Destinatario {
@@ -48,6 +65,7 @@ export function EstadoCuentaPanel({
   telefonos,
   referentes = [],
   onEnviado,
+  planEnContexto,
 }: EstadoCuentaPanelProps) {
   const [enviando, setEnviando] = useState(false);
   const [destinatarioIdx, setDestinatarioIdx] = useState(0);
@@ -58,7 +76,12 @@ export function EstadoCuentaPanel({
    * le estaban reclamando. No hace falta ningún endpoint nuevo:
    * `/estado_cuenta` ya viene desglosado por plan.
    */
-  const [planId, setPlanId] = useState<number | undefined>(undefined);
+  const [planId, setPlanId] = useState<number | undefined>(planEnContexto);
+
+  /** El plan que se está tocando, si el que abrió este panel dijo cuál es */
+  const planDelContexto = planEnContexto
+    ? data.planes.find((p) => p.planId === planEnContexto)
+    : undefined;
 
   const texto = estadoDeCuentaToText(data);
 
@@ -184,13 +207,29 @@ export function EstadoCuentaPanel({
             disabled={enviando}
             className="h-11 w-full rounded-md border border-input bg-transparent px-3 text-base shadow-xs disabled:opacity-50"
           >
-            <option value="">Toda la cuenta ({data.planes.length} planes)</option>
-            {data.planes.map((plan) => (
-              <option key={plan.planId} value={plan.planId}>
-                Solo {plan.nombre} — {fmtMoney(plan.pendiente)} pendiente
+            {/* Con un plan en contexto —un cobro, una advertencia— las únicas
+                dos opciones son ESE plan y la cuenta entera. Los otros planes
+                del cliente no aparecen: el comprobante de lo que se acaba de
+                hacer no puede ser de otra financiación. */}
+            {planDelContexto ? (
+              <option value={planDelContexto.planId}>
+                Solo {planDelContexto.nombre} — {fmtMoney(planDelContexto.pendiente)} pendiente
               </option>
-            ))}
+            ) : (
+              data.planes.map((plan) => (
+                <option key={plan.planId} value={plan.planId}>
+                  Solo {plan.nombre} — {fmtMoney(plan.pendiente)} pendiente
+                </option>
+              ))
+            )}
+            <option value="">Toda la cuenta ({data.planes.length} planes)</option>
           </select>
+          {planDelContexto && (
+            <p className="text-[0.7rem] text-muted-foreground">
+              El comprobante es de la financiación que acabás de tocar. Para mandar el de otra,
+              entrá por la ficha del cliente.
+            </p>
+          )}
         </div>
       )}
 
