@@ -139,9 +139,18 @@ export function resumenParaSms(ec: EstadoDeCuenta, empresa: string): string {
   }
 
   // La próxima de todas: el cliente quiere saber cuándo le toca, no cuál plan.
+  //
+  // `proximaCuota` es la primera IMPAGA, que con cuotas atrasadas es la más
+  // vieja: se le mandaba "Prox: $30.000 el 5/6" un 19 de agosto, dos renglones
+  // abajo de "VENCIDO". En un SMS, sin más contexto que eso, se lee como que
+  // le queda por pagar algo que ya venció hace dos meses.
+  //
+  // Va la primera que TODAVÍA NO venció. Si no hay ninguna —está todo
+  // vencido— la línea no se manda: lo que hay que decirle ya está arriba, y
+  // en un SMS cada carácter se paga.
   const proxima = ec.planes
     .map((p) => p.proximaCuota)
-    .filter((c): c is NonNullable<typeof c> => c != null)
+    .filter((c): c is NonNullable<typeof c> => c != null && c.fecha >= ec.generadoEl)
     .sort((a, b) => a.fecha.localeCompare(b.fecha))[0];
 
   if (proxima) {

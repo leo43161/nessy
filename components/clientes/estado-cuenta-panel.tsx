@@ -6,7 +6,7 @@ import { Copy, FileDown, Loader2, MessageCircle, MessageSquareText, Printer } fr
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { fmtMoney, formatFecha } from "@/lib/format";
-import { estadoDeCuentaToText } from "@/lib/estado-cuenta";
+import { estadoDeCuentaToText, etiquetaCuotaPendiente } from "@/lib/estado-cuenta";
 import { enviarEstadoCuenta } from "@/lib/compartir";
 import { enlaceSms, medirSms, resumenParaSms } from "@/lib/sms";
 import { EMPRESA_NOMBRE } from "@/lib/marca";
@@ -150,10 +150,13 @@ export function EstadoCuentaPanel({
               <Row label="Pendiente" valor={fmtMoney(plan.pendiente)} />
               {plan.vencido > 0 && <Row label="Vencido" valor={fmtMoney(plan.vencido)} danger />}
             </div>
+            {/* "Próxima cuota" solo si de verdad todavía no venció: la primera
+                impaga puede ser de hace meses, y el cobrador le muestra esta
+                pantalla al cliente. */}
             {plan.proximaCuota && (
               <div className="mt-2 border-t pt-2 text-[0.7rem] text-muted-foreground">
-                Próxima cuota: {fmtMoney(plan.proximaCuota.monto)} el{" "}
-                {formatFecha(plan.proximaCuota.fecha)}
+                {etiquetaCuotaPendiente(plan.proximaCuota.fecha, data.generadoEl)}:{" "}
+                {fmtMoney(plan.proximaCuota.monto)} el {formatFecha(plan.proximaCuota.fecha)}
               </div>
             )}
           </div>

@@ -127,3 +127,29 @@ assert.ok(enlaceSms(null, "a\nb").includes("%0A"));
 assert.ok(enlaceSms(null, "a&b=c").includes("%26"));
 
 console.log("✓ sms.ts OK");
+
+// ── "Prox" nunca puede tener una fecha que ya pasó ────────────────────────
+//
+// `proximaCuota` es la primera IMPAGA, y con cuotas atrasadas esa es la más
+// vieja. El SMS decía "Prox: $30.000 el 5/6" un 19 de agosto, dos renglones
+// abajo de "VENCIDO": el cliente lee que le queda por pagar algo que venció
+// hace dos meses.
+const todoVencido = resumenParaSms(
+  ec({ totalVencido: 90000, planes: [plan("2026-06-05", 30000)] }),
+  "Preferenciale",
+);
+assert.ok(todoVencido.includes("VENCIDO: $90.000"), todoVencido);
+assert.ok(
+  !todoVencido.includes("Prox"),
+  "sin ninguna cuota por vencer, no se anuncia una próxima: " + todoVencido,
+);
+
+// Con atrasadas Y una futura, se anuncia la futura, no la atrasada.
+const mixto = resumenParaSms(
+  ec({ totalVencido: 60000, planes: [plan("2026-06-05", 30000), plan("2026-09-02", 25000)] }),
+  "Preferenciale",
+);
+assert.ok(mixto.includes("02/09"), "se anuncia la que todavía no venció: " + mixto);
+assert.ok(!mixto.includes("05/06"), "la vencida no se anuncia como próxima: " + mixto);
+
+console.log("✓ sms.ts — 'Prox' nunca sale con fecha pasada");
