@@ -98,14 +98,24 @@ export async function getClienteDetalle(clienteId: number): Promise<ClienteDetal
  * cuando el cliente está incomunicado, el estado de cuenta se le manda al
  * garante, y pedirlos aparte sería un request de más.
  */
-export async function getEstadoDeCuenta(clienteId: number): Promise<{
+export async function getEstadoDeCuenta(
+  clienteId: number,
+  /**
+   * Una sola financiación.
+   *
+   * La API lo resuelve con `sp_VerEstadoDeCuentaSingular`: mismas columnas,
+   * solo las filas de ese plan. El saldo y el desglose ya vienen calculados
+   * sobre él, así que no hay nada que recortar de este lado.
+   */
+  planId?: number,
+): Promise<{
   estadoDeCuenta: EstadoDeCuenta;
   telefonos: Telefono[];
   referentes: ReferenteDeCliente[];
 }> {
   // El endpoint es /estado_cuenta?id_cliente=N, no una subruta de /clientes.
   const { data } = await api.get<RespuestaEstadoCuenta>("/estado_cuenta", {
-    params: { id_cliente: clienteId },
+    params: { id_cliente: clienteId, id_plan: planId },
   });
   return {
     estadoDeCuenta: aEstadoDeCuenta(data, todayISO()),

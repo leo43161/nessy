@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { fmtMoney, formatFecha } from "@/lib/format";
 import { estadoDeCuentaToText, etiquetaCuotaPendiente } from "@/lib/estado-cuenta";
+import { getEstadoDeCuenta } from "@/services/clientes.service";
+import { soloElPlan } from "@/lib/estado-cuenta-por-plan";
 import { enviarEstadoCuenta } from "@/lib/compartir";
 import { enlaceSms, medirSms, resumenParaSms } from "@/lib/sms";
 import { EMPRESA_NOMBRE } from "@/lib/marca";
@@ -67,7 +69,17 @@ export function EstadoCuentaPanel({
   onEnviado,
   planEnContexto,
 }: EstadoCuentaPanelProps) {
-  const [enviando, setEnviando] = useState(false);
+  /**
+   * QUÉ envío está en curso, identificado por su botón: "principal",
+   * "descarga" o "plan-46". `null` = ninguno.
+   *
+   * Es una clave por botón y no un booleano ni el id del plan: con el plan
+   * solo, el botón principal y el de la financiación elegida se prendían
+   * juntos, y con un booleano se prendían todos.
+   */
+  const [enviandoDesde, setEnviandoDesde] = useState<string | null>(null);
+  /** Cualquier envío en curso: bloquea el resto de los botones. */
+  const enviando = enviandoDesde !== null;
   const [destinatarioIdx, setDestinatarioIdx] = useState(0);
   /**
    * Qué plan se manda. `undefined` = toda la cuenta, que es lo de siempre.
@@ -83,12 +95,23 @@ export function EstadoCuentaPanel({
     ? data.planes.find((p) => p.planId === planEnContexto)
     : undefined;
 
-  const texto = estadoDeCuentaToText(data);
+  /**
+   * Lo que se copia, se imprime y va por SMS: del plan elegido, igual que el
+   * PDF. Antes era siempre la cuenta entera aunque el selector dijera un plan.
+   *
+   * Acá el recorte se hace en el navegador y no con
+   * `sp_VerEstadoDeCuentaSingular`: es lo que se muestra en pantalla y cambia
+   * con cada toque del selector, y no vale un request por cada uno. Los
+   * números son los mismos —los totales por plan ya vienen calculados por la
+   * API—; el SP se usa para el PDF, que es lo que queda por escrito.
+   */
+  const elegido = soloElPlan(data, planId);
+  const texto = estadoDeCuentaToText(elegido);
 
   // El SMS lleva su propio texto, no el de WhatsApp: aquel usa `*` para las
   // negritas —que en un mensaje de texto se ven tal cual— y lista plan por
   // plan, lo que multiplicaría el costo. Ver lib/sms.ts.
-  const textoSms = resumenParaSms(data, EMPRESA_NOMBRE);
+  const textoSms = resumenParaSms(elegido, EMPRESA_NOMBRE);
   const medida = medirSms(textoSms);
 
   const destinatarios: Destinatario[] = [
@@ -118,28 +141,62 @@ export function EstadoCuentaPanel({
     }
   };
 
-  const generarPdf = async () => {
-    const { archivoEstadoCuentaPdf } = await import("@/lib/pdf/estado-cuenta-pdf");
-    return archivoEstadoCuentaPdf(data, cliente, undefined, planId);
+  /**
+   * El PDF de una financiación —o de toda la cuenta— y el texto que lo
+   * acompaña, los dos del MISMO recorte.
+   *
+   * El recorte lo hace la base: con un plan, la API responde por
+   * `sp_VerEstadoDeCuentaSingular` y ya devuelve el saldo y el desglose
+   * calculados sobre él. Por eso se vuelve a pedir en vez de reusar el que hay
+   * en pantalla — el PDF es lo que el cliente recibe por escrito y sale de una
+   * sola fuente.
+   *
+   * Antes el PDF se recortaba acá y el texto NO: el mensaje hablaba del saldo
+   * de toda la cuenta y el adjunto de un solo plan.
+   */
+  const armar = async (plan: number | undefined) => {
+    const { estadoDeCuenta } = await getEstadoDeCuenta(data.clienteId, plan);
+    const { archivoEstadoCuentaPdf, descargarArchivo } = await import(
+      "@/lib/pdf/estado-cuenta-pdf"
+    );
+
+    /**
+     * El recorte va DOS veces, y no es redundancia de más.
+     *
+     * La API ya devolvió un solo plan si entendió `id_plan`, y entonces esto
+     * no hace nada. Pero una API sin ese parámetro —la anterior a este
+     * cambio— lo ignora y responde la cuenta entera: sin este segundo
+     * recorte, el cliente recibe por escrito el saldo de todas sus
+     * financiaciones cuando se le quiso mandar una. Pasó exactamente eso
+     * probando el front nuevo contra la API vieja.
+     */
+    const recortado = soloElPlan(estadoDeCuenta, plan);
+
+    return {
+      archivo: await archivoEstadoCuentaPdf(recortado, cliente),
+      texto: estadoDeCuentaToText(recortado),
+      descargarArchivo,
+    };
   };
 
   const descargarPdf = async () => {
-    setEnviando(true);
+    setEnviandoDesde("descarga");
     try {
-      const { descargarArchivo } = await import("@/lib/pdf/estado-cuenta-pdf");
-      descargarArchivo(await generarPdf());
+      const { archivo, descargarArchivo } = await armar(planId);
+      descargarArchivo(archivo);
     } catch {
       toast.error("No se pudo generar el PDF.");
     } finally {
-      setEnviando(false);
+      setEnviandoDesde(null);
     }
   };
 
-  const enviar = async () => {
-    setEnviando(true);
+  /** `plan` explícito: el botón de una tarjeta manda sobre el selector. */
+  const enviar = async (plan = planId, desde = "principal") => {
+    setEnviandoDesde(desde);
     try {
-      const { descargarArchivo } = await import("@/lib/pdf/estado-cuenta-pdf");
-      const salio = await enviarEstadoCuenta(await generarPdf(), texto, numero, descargarArchivo);
+      const { archivo, texto: cuerpo, descargarArchivo } = await armar(plan);
+      const salio = await enviarEstadoCuenta(archivo, cuerpo, numero, descargarArchivo);
       if (salio) {
         toast.success("Estado de cuenta enviado.");
         onEnviado?.();
@@ -147,7 +204,7 @@ export function EstadoCuentaPanel({
     } catch {
       toast.error("No se pudo enviar el estado de cuenta.");
     } finally {
-      setEnviando(false);
+      setEnviandoDesde(null);
     }
   };
 
@@ -181,6 +238,28 @@ export function EstadoCuentaPanel({
                 {etiquetaCuotaPendiente(plan.proximaCuota.fecha, data.generadoEl)}:{" "}
                 {fmtMoney(plan.proximaCuota.monto)} el {formatFecha(plan.proximaCuota.fecha)}
               </div>
+            )}
+
+            {/* El comprobante de ESTA financiación, sin pasar por el selector
+                de abajo. Es el camino corto para lo que más se hace: el cliente
+                pregunta por un plan y hay que mandarle ese.
+                Con un solo plan no hace falta: los botones de abajo ya son de
+                esa financiación. */}
+            {data.planes.length > 1 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-2 w-full"
+                disabled={enviando || destinatarios.length === 0}
+                onClick={() => enviar(plan.planId, `plan-${plan.planId}`)}
+              >
+                {enviandoDesde === `plan-${plan.planId}` ? (
+                  <Loader2 className="animate-spin" />
+                ) : (
+                  <MessageCircle />
+                )}
+                Mandar el PDF de esta financiación
+              </Button>
             )}
           </div>
         ))}
@@ -292,7 +371,7 @@ export function EstadoCuentaPanel({
           Copiar
         </Button>
         <Button variant="secondary" size="sm" onClick={descargarPdf} disabled={enviando}>
-          <FileDown />
+          {enviandoDesde === "descarga" ? <Loader2 className="animate-spin" /> : <FileDown />}
           PDF
         </Button>
         {/* Abre la app de mensajes del teléfono con el resumen ya escrito.
@@ -305,9 +384,11 @@ export function EstadoCuentaPanel({
           </a>
         </Button>
 
-        <Button size="sm" className="ml-auto" onClick={enviar} disabled={enviando}>
-          {enviando ? <Loader2 className="animate-spin" /> : <MessageCircle />}
-          {enviando
+        {/* `() => enviar()` y no `enviar` a secas: React le pasaría el evento
+            del click como si fuera el plan. */}
+        <Button size="sm" className="ml-auto" onClick={() => enviar()} disabled={enviando}>
+          {enviandoDesde === "principal" ? <Loader2 className="animate-spin" /> : <MessageCircle />}
+          {enviandoDesde === "principal"
             ? "Generando…"
             : onEnviado
               ? "Enviar PDF y continuar"
