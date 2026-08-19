@@ -15,8 +15,15 @@ export const WORKDATE_KEY = "gc_workdate";
  * (el 19 aparecían el 19 y el 26; parado en el 26 aparecían tres). Una cuota
  * que todavía no venció no es trabajo de hoy.
  *
- * 60 días y no 10 para que una deuda vieja siga a la vista: es la que hay que
- * ir a buscar. Lo ya cobrado de días anteriores se filtra aparte, en
- * `getCobrosDia`.
+ * **Un año, porque la deuda no caduca.** Estaba en 60 días y una cuota impaga
+ * de hace 75 desaparecía de la lista: justo la más vieja, que es la que hay
+ * que ir a buscar. El cobrador salía a la calle sin saber que existía.
+ *
+ * No cuesta nada traerla: `getHistorico()` —el que alimenta las estadísticas
+ * de esta misma pantalla— ya pide de 2000 a 2099 en cada carga. Recortar el
+ * worklist a dos meses no ahorraba un request, solo escondía deuda.
+ *
+ * Lo ya cobrado de días anteriores no se acumula: lo filtra `esTrabajoDelDia`.
+ * Lo único que se arrastra es lo que no se cobró.
  */
-export const VENTANA_PASADO = 60;
+export const VENTANA_PASADO = 365;
