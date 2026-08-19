@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { Navbar } from "@/components/layout/navbar";
 import { NavTabs } from "@/components/layout/nav-tabs";
+import { RANURA_ACCIONES } from "@/components/shared/acciones-fab";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { restoreSession } from "@/store/slices/auth.slice";
 import { initWorkDate } from "@/store/slices/ui.slice";
@@ -57,6 +58,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <main className="flex-1 px-3.5 pt-4 pb-28">{children}</main>
       </div>
       <NavTabs />
+
+      {/* Hueco del botón de acciones (AccionesFab se dibuja acá por portal).
+          Va en el layout y no en cada pantalla porque dónde entra depende del
+          armazón: la app vive en una franja centrada del ancho de un teléfono,
+          así que el botón se alinea al borde IZQUIERDO DE LA FRANJA y no al de
+          la pantalla — en escritorio, pegado al viewport, quedaría flotando
+          solo en el fondo gris. Va arriba de la barra de navegación, que mide
+          56 px más el margen de gestos del celular.
+          `pointer-events-none` para que el hueco no tape los clics del listado
+          que hay detrás; el botón se los devuelve. */}
+      <div
+        id={RANURA_ACCIONES}
+        className="pointer-events-none fixed bottom-[calc(4.25rem_+_env(safe-area-inset-bottom))] left-1/2 z-45 w-full max-w-md -translate-x-1/2 pl-3.5"
+      />
     </div>
   );
 }

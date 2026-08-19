@@ -1,5 +1,3 @@
-export const APP_NAME = "GestorCobros";
-
 // Claves de almacenamiento local. No se pisan entre sí ni con las del panel
 // admin, que usa el prefijo `na_`.
 export const TOKEN_KEY = "gc_token";

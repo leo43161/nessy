@@ -276,6 +276,14 @@ export interface RegistrarPagoPayload {
   idMetodoDePago: number;
   /** Solo para el cobro parcial: cuándo se pactó el resto. */
   nuevaFecha?: string;
+  /**
+   * Solo para el cobro adelantado: de dónde come el sobrante.
+   *
+   *   false / sin mandar  del FINAL del plan → el cliente termina antes
+   *   true                de la PRÓXIMA → se saltea las semanas que vienen,
+   *                       el plan no se acorta
+   */
+  desdeLaProxima?: boolean;
   concepto?: string;
   /** Cobrador que registra (para asistencias) */
   cobradorId: number;

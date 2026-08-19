@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { CalendarDays, CheckCheck, ListFilter, Users, Wallet } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CobroCard } from "@/components/cobros/cobro-card";
 import { CobrosFilters, type FiltrosState } from "@/components/cobros/cobros-filters";
@@ -9,12 +10,14 @@ import { DateHeader } from "@/components/cobros/date-header";
 import { FilterPills, type CobroFilter } from "@/components/cobros/filter-pills";
 import { RankingBanner } from "@/components/cobros/ranking-banner";
 import { RegistroDialog } from "@/components/cobros/registro-dialog";
+import { WorkDateDialog } from "@/components/cobros/work-date-dialog";
+import { AccionesFab } from "@/components/shared/acciones-fab";
 import { ClienteDetailDialog } from "@/components/clientes/cliente-detail-dialog";
 import { EmptyState } from "@/components/shared/empty-state";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { fetchCobros } from "@/store/slices/cobros.slice";
 import { fetchEstadisticas } from "@/store/slices/estadisticas.slice";
-import { todayISO } from "@/lib/format";
+import { formatFecha, todayISO } from "@/lib/format";
 import type { CobroDelDia } from "@/types";
 
 export default function CobrosPage() {
@@ -34,6 +37,7 @@ export default function CobrosPage() {
   const [registroOpen, setRegistroOpen] = useState(false);
   const [clienteId, setClienteId] = useState<number | null>(null);
   const [clienteOpen, setClienteOpen] = useState(false);
+  const [fechaOpen, setFechaOpen] = useState(false);
 
   // Carga de cobros según filtros de servidor (cobrador/localidad/fecha)
   useEffect(() => {
@@ -107,6 +111,52 @@ export default function CobrosPage() {
           ))}
         </div>
       )}
+
+      {/* Las mismas cosas que ya se pueden hacer con los controles de arriba,
+          juntas en un lugar fijo y con el nombre completo. El porqué está en
+          components/shared/acciones-fab.tsx. */}
+      <AccionesFab
+        acciones={[
+          {
+            label: "Ver los que faltan cobrar",
+            descripcion: "Solo las cuotas todavía pendientes",
+            icon: <Wallet />,
+            onSelect: () => setEstadoFilter("Pendiente"),
+            disabled: estadoFilter === "Pendiente",
+          },
+          {
+            label: "Ver los ya cobrados",
+            descripcion: "Lo que entró en este día",
+            icon: <CheckCheck />,
+            onSelect: () => setEstadoFilter("Pagado"),
+            disabled: estadoFilter === "Pagado",
+          },
+          {
+            label: "Ver todos los cobros del día",
+            descripcion: "Saca el filtro y muestra la lista completa",
+            icon: <ListFilter />,
+            onSelect: () => setEstadoFilter("all"),
+            disabled: estadoFilter === "all",
+          },
+          {
+            label: "Cambiar el día de trabajo",
+            descripcion: "Estás viendo el " + formatFecha(hoy),
+            icon: <CalendarDays />,
+            onSelect: () => setFechaOpen(true),
+            separar: true,
+          },
+          {
+            label: filtros.todosCobradores ? "Ver solo mis cobros" : "Ver los cobros de todos",
+            descripcion: filtros.todosCobradores
+              ? "Volver a tu cartera"
+              : "Para salir a cobrar por un compañero",
+            icon: <Users />,
+            onSelect: () => setFiltros({ ...filtros, todosCobradores: !filtros.todosCobradores }),
+          },
+        ]}
+      />
+
+      <WorkDateDialog open={fechaOpen} onOpenChange={setFechaOpen} />
 
       <RegistroDialog
         cobro={cobroActual}

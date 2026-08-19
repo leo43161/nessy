@@ -19,7 +19,7 @@ export function InitialsAvatar({ nombre, size = "sm", className }: InitialsAvata
       className={cn(
         "flex shrink-0 items-center justify-center rounded-full font-bold",
         SIZES[size],
-        "bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300",
+        "bg-accent text-accent-foreground",
         className
       )}
     >

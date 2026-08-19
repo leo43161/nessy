@@ -1,22 +1,31 @@
 import type { Metadata } from "next";
-import { Sora, JetBrains_Mono } from "next/font/google";
+import { Archivo, Space_Mono } from "next/font/google";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { StoreProvider } from "@/components/providers/store-provider";
 import { Toaster } from "@/components/ui/sonner";
+import { EMPRESA_NOMBRE } from "@/lib/marca";
 import "./globals.css";
 
-const sora = Sora({
+// Archivo es la tipografía de marca de Preferenciale (brand sheet, sección 05):
+// va en toda la interfaz. Space Mono queda para los montos, porque sus números
+// son tabulares y alinean las columnas de plata — Archivo no lo hace.
+//
+// Son las mismas dos familias que el panel admin: es la misma marca.
+const archivo = Archivo({
   variable: "--font-sans",
   subsets: ["latin"],
+  // Los pesos que define el brand sheet.
+  weight: ["400", "500", "600", "700"],
 });
 
-const jetbrainsMono = JetBrains_Mono({
+const spaceMono = Space_Mono({
   variable: "--font-mono",
+  weight: ["400", "700"],
   subsets: ["latin"],
 });
 
 export const metadata: Metadata = {
-  title: "GestorCobros",
+  title: `${EMPRESA_NOMBRE} — Cobros`,
   description: "Control de clientes y cobros de financiación",
 };
 
@@ -29,7 +38,7 @@ export default function RootLayout({
     <html
       lang="es"
       suppressHydrationWarning
-      className={`${sora.variable} ${jetbrainsMono.variable} h-full antialiased`}
+      className={`${archivo.variable} ${spaceMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col">
         <ThemeProvider>

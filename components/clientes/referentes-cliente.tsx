@@ -67,7 +67,7 @@ export function ReferentesCliente({
             key={`${ref.tipo}-${ref.id}`}
             className="flex items-center gap-2 rounded-lg border bg-card px-2.5 py-2"
           >
-            <span className="shrink-0 rounded bg-orange-100 px-1.5 py-0.5 text-[0.58rem] font-bold text-orange-700 dark:bg-orange-950 dark:text-orange-300">
+            <span className="shrink-0 rounded bg-accent px-1.5 py-0.5 text-xs font-bold text-accent-foreground">
               {ref.tipo}
             </span>
             <div className="min-w-0 flex-1">

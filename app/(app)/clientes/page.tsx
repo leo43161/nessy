@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { Eraser, MapPin, Users } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ClienteCard } from "@/components/clientes/cliente-card";
 import { ClienteDetailDialog } from "@/components/clientes/cliente-detail-dialog";
 import { CobrosFilters, type FiltrosState } from "@/components/cobros/cobros-filters";
 import { EmptyState } from "@/components/shared/empty-state";
+import { AccionesFab } from "@/components/shared/acciones-fab";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { fetchClientes } from "@/store/slices/clientes.slice";
 
@@ -73,6 +75,34 @@ export default function ClientesPage() {
           ))}
         </div>
       )}
+
+      <AccionesFab
+        acciones={[
+          {
+            label: filtros.todosCobradores ? "Ver solo mis clientes" : "Ver todos los clientes",
+            descripcion: filtros.todosCobradores
+              ? "Volver a tu cartera"
+              : "Incluye los de los demás cobradores",
+            icon: <Users />,
+            onSelect: () => setFiltros({ ...filtros, todosCobradores: !filtros.todosCobradores }),
+          },
+          {
+            label: "Ver todas las localidades",
+            descripcion: "Saca el filtro de zona",
+            icon: <MapPin />,
+            onSelect: () => setFiltros({ ...filtros, localidadId: "todas" }),
+            disabled: filtros.localidadId === "todas",
+          },
+          {
+            label: "Limpiar la búsqueda",
+            descripcion: "Vuelve a mostrar la lista completa",
+            icon: <Eraser />,
+            onSelect: () => setFiltros({ ...filtros, busqueda: "" }),
+            disabled: filtros.busqueda === "",
+            separar: true,
+          },
+        ]}
+      />
 
       <ClienteDetailDialog clienteId={clienteId} open={detalleOpen} onOpenChange={setDetalleOpen} />
     </>

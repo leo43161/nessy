@@ -30,13 +30,13 @@ export function RankingBanner({ stats }: { stats: EstadisticasCobrador | null })
           ? "border-l-red-500 bg-red-50 dark:bg-red-950/40"
           : esPrimero
             ? "border-l-green-500 bg-green-50 dark:bg-green-950/40"
-            : "border-l-orange-500 bg-orange-50 dark:bg-orange-950/40"
+            : "border-l-amber-500 bg-amber-50 dark:bg-amber-950/40"
       )}
     >
       <Trophy
         className={cn(
           "size-5 shrink-0",
-          esUltimo ? "text-red-500" : esPrimero ? "text-green-500" : "text-orange-500"
+          esUltimo ? "text-red-500" : esPrimero ? "text-green-600" : "text-amber-500"
         )}
       />
       <p

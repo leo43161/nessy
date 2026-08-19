@@ -34,7 +34,7 @@ export function CobrosSummary({ cobros }: { cobros: CobroDelDia[] }) {
           className={cn(
             "rounded-lg border px-2.5 py-2 text-center shadow-sm",
             s.highlight
-              ? "border-transparent bg-gradient-to-br from-orange-500 to-orange-600 text-white"
+              ? "border-transparent bg-linear-to-br from-primary to-primary-dark text-primary-foreground"
               : "bg-card"
           )}
         >

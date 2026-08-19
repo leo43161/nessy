@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, Loader2, MessageCircle, ReceiptText, User } from "lucide-react";
+import { AlertTriangle, Loader2, MapPin, MessageCircle, ReceiptText, RotateCw, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,8 +24,9 @@ import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { registrarAdvertencia, registrarPago } from "@/store/slices/cobros.slice";
 import { useMetodosDePago } from "@/hooks/use-catalogos";
 import { marcarWhatsAppEnviado } from "@/services/cobros.service";
-import { obtenerUbicacion } from "@/lib/geo";
+import { obtenerUbicacion, type ResultadoUbicacion } from "@/lib/geo";
 import { fmtMoney, formatFecha, mapaUrl } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import {
   esVencido,
   MOTIVOS_ADVERTENCIA,
@@ -63,6 +64,15 @@ export function RegistroDialog({ cobro, open, onOpenChange, onVerCliente }: Regi
   const [nuevaFecha, setNuevaFecha] = useState("");
   const [motivo, setMotivo] = useState(MOTIVOS_ADVERTENCIA[0]);
 
+  /**
+   * Cobro adelantado: de dónde sale el sobrante.
+   *
+   * `false` —el final del plan— es el default porque es lo único que el
+   * sistema hizo hasta ahora. Un cobrador que no mire esta opción registra el
+   * cobro exactamente como se registraba antes.
+   */
+  const [desdeLaProxima, setDesdeLaProxima] = useState(false);
+
   // El monto y el método se DERIVAN mientras el cobrador no los toque, en vez
   // de sincronizarse con un efecto: null significa "todavía no lo cambió".
   //
@@ -73,6 +83,30 @@ export function RegistroDialog({ cobro, open, onOpenChange, onVerCliente }: Regi
   const [montoEditado, setMontoEditado] = useState<string | null>(null);
   const [metodoElegido, setMetodoElegido] = useState<number | null>(null);
 
+  /**
+   * La ubicación, que ahora es obligatoria para cobrar.
+   *
+   * Se pide al abrir el diálogo y no recién al apretar "Cobrar": el GPS puede
+   * tardar y el permiso puede estar denegado, y es mejor que el cobrador se
+   * entere mientras mira la ficha que después de tipear el monto.
+   */
+  const [ubicacion, setUbicacion] = useState<ResultadoUbicacion | null>(null);
+  const [buscandoUbicacion, setBuscandoUbicacion] = useState(false);
+
+  const pedirUbicacion = useCallback(async () => {
+    setBuscandoUbicacion(true);
+    setUbicacion(await obtenerUbicacion());
+    setBuscandoUbicacion(false);
+  }, []);
+
+  useEffect(() => {
+    if (!open) {
+      setUbicacion(null);
+      return;
+    }
+    void pedirUbicacion();
+  }, [open, pedirUbicacion]);
+
   const monto = montoEditado ?? String(cobro?.montoEsperado ?? "");
   const idMetodo = metodoElegido ?? metodos[0]?.id ?? 0;
 
@@ -82,6 +116,7 @@ export function RegistroDialog({ cobro, open, onOpenChange, onVerCliente }: Regi
       setMontoEditado(null);
       setMetodoElegido(null);
       setNuevaFecha("");
+      setDesdeLaProxima(false);
     }
     onOpenChange(abierto);
   };
@@ -97,17 +132,25 @@ export function RegistroDialog({ cobro, open, onOpenChange, onVerCliente }: Regi
     !registrando &&
     montoNum > 0 &&
     idMetodo > 0 &&
-    (tipo !== "parcial" || nuevaFecha !== "");
+    (tipo !== "parcial" || nuevaFecha !== "") &&
+    // Sin ubicación no se cobra: es el pedido del cliente y es lo que hace que
+    // `Dentro_Rango` signifique algo. La advertencia (no se pudo cobrar) sí
+    // sigue disponible, así que la visita nunca queda sin registrar.
+    ubicacion?.ok === true;
   // Asistencia: el cobrador logueado no es el asignado → se marcará fuera de rango
   const asistiendo = cobrador.id !== cobro.cobradorAsignadoId;
   const mensajeDemora = `Hola ${cliente.nombreCompleto.split(" ")[0]}! Te recordamos la cuota pendiente de ${fmtMoney(cobro.montoEsperado)} (${formatFecha(cobro.fechaAcordada)}). ¿Coordinamos el pago?`;
 
   const registrar = async () => {
-    setRegistrando(true);
+    // El botón ya está deshabilitado sin ubicación, pero se vuelve a mirar acá:
+    // es la última puerta antes de mandar el cobro, y `puedeCobrar` es una
+    // condición de UI que mañana puede cambiar sin que nadie se acuerde de esto.
+    if (!ubicacion?.ok) {
+      toast.error(ubicacion?.mensaje ?? "Falta la ubicación para poder cobrar.");
+      return;
+    }
 
-    // N.5: la ubicación decide Dentro_Rango (≤ 2 km del domicilio), pero nunca
-    // bloquea el cobro. Si el navegador no la da, se manda en null.
-    const ubicacion = await obtenerUbicacion();
+    setRegistrando(true);
 
     const result = await dispatch(
       registrarPago({
@@ -115,17 +158,16 @@ export function RegistroDialog({ cobro, open, onOpenChange, onVerCliente }: Regi
         monto: montoNum,
         idMetodoDePago: idMetodo,
         nuevaFecha: tipo === "parcial" ? nuevaFecha : undefined,
+        desdeLaProxima: tipo === "adelantado" ? desdeLaProxima : undefined,
         cobradorId: cobrador.id,
-        lat: ubicacion?.lat ?? null,
-        lon: ubicacion?.lon ?? null,
+        lat: ubicacion.ubicacion.lat,
+        lon: ubicacion.ubicacion.lon,
       }),
     );
     setRegistrando(false);
 
     if (registrarPago.fulfilled.match(result)) {
-      toast.success(`${cliente.nombreCompleto}: ${fmtMoney(montoNum)} cobrados`, {
-        description: ubicacion ? undefined : "Sin ubicación: quedará fuera de rango.",
-      });
+      toast.success(`${cliente.nombreCompleto}: ${fmtMoney(montoNum)} cobrados`);
       // Tras cobrar, el estado de cuenta es obligatorio: es el comprobante.
       setEstadoCuentaObligatorio(true);
       setEstadoCuentaOpen(true);
@@ -255,13 +297,37 @@ export function RegistroDialog({ cobro, open, onOpenChange, onVerCliente }: Regi
                 />
                 {/* El tipo no se elige: lo deduce la API del monto. Se muestra
                     para que el cobrador vea qué va a pasar antes de confirmar. */}
-                <p className="text-xs text-muted-foreground">
+                <p className="text-sm text-muted-foreground">
                   {montoNum > 0 ? TIPO_DE_COBRO_LABEL[tipo] : "Ingresá cuánto entró"}
-                  {tipo === "adelantado" && montoNum > 0 && (
-                    <> · el sobrante de {fmtMoney(montoNum - cobro.montoEsperado)} cancela cuotas futuras</>
-                  )}
                 </p>
               </div>
+
+              {/* Pagó de más: hay que elegir de dónde sale el sobrante, porque
+                  las dos opciones NO hacen lo mismo. Una le acorta el plan y la
+                  otra le libera las semanas que vienen. Por eso están escritas
+                  con la consecuencia, no con el nombre técnico. */}
+              {tipo === "adelantado" && montoNum > 0 && (
+                <div className="space-y-2 rounded-lg border border-input bg-card p-3">
+                  <div className="text-sm font-semibold">
+                    Sobran {fmtMoney(montoNum - cobro.montoEsperado)}. ¿De dónde los descontamos?
+                  </div>
+
+                  <OpcionSobrante
+                    activa={!desdeLaProxima}
+                    onClick={() => setDesdeLaProxima(false)}
+                    titulo="De las últimas cuotas"
+                    detalle="Termina de pagar antes. Las próximas semanas sigue pagando igual."
+                    disabled={registrando}
+                  />
+                  <OpcionSobrante
+                    activa={desdeLaProxima}
+                    onClick={() => setDesdeLaProxima(true)}
+                    titulo="De las próximas cuotas"
+                    detalle="Se saltea las semanas que vienen. El plan termina en la misma fecha."
+                    disabled={registrando}
+                  />
+                </div>
+              )}
 
               <div className="space-y-1.5">
                 <Label htmlFor="metodo">Método de pago</Label>
@@ -270,7 +336,7 @@ export function RegistroDialog({ cobro, open, onOpenChange, onVerCliente }: Regi
                   value={idMetodo}
                   onChange={(e) => setMetodoElegido(Number(e.target.value))}
                   disabled={registrando || metodos.length === 0}
-                  className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs disabled:opacity-50"
+                  className="h-11 w-full rounded-md border border-input bg-transparent px-3.5 text-base shadow-xs disabled:opacity-50"
                 >
                   {metodos.map((m) => (
                     <option key={m.id} value={m.id}>
@@ -298,7 +364,13 @@ export function RegistroDialog({ cobro, open, onOpenChange, onVerCliente }: Regi
                 </div>
               )}
 
-              <Button className="w-full" disabled={!puedeCobrar} onClick={registrar}>
+              <EstadoUbicacion
+                estado={ubicacion}
+                buscando={buscandoUbicacion}
+                onReintentar={pedirUbicacion}
+              />
+
+              <Button className="w-full" size="lg" disabled={!puedeCobrar} onClick={registrar}>
                 {registrando ? <Loader2 className="animate-spin" /> : <ReceiptText />}
                 {registrando ? "Registrando…" : `Cobrar ${fmtMoney(montoNum)}`}
               </Button>
@@ -446,7 +518,7 @@ function ActionShell({
   return (
     <span
       aria-disabled={disabled}
-      className="flex cursor-pointer flex-col items-center gap-1 rounded-lg bg-muted px-1.5 py-2.5 text-[0.62rem] font-semibold text-muted-foreground transition-colors hover:bg-orange-100 hover:text-orange-700 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 dark:hover:bg-orange-950 dark:hover:text-orange-300 [&_svg]:size-4"
+      className="flex cursor-pointer flex-col items-center gap-1 rounded-lg bg-muted px-1.5 py-2.5 text-[0.62rem] font-semibold text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground aria-disabled:cursor-not-allowed aria-disabled:opacity-50 [&_svg]:size-4"
     >
       {icon}
       {label}
@@ -468,6 +540,98 @@ function ActionButton({
   return (
     <button type="button" onClick={onClick} disabled={disabled} className="contents">
       <ActionShell icon={icon} label={label} disabled={disabled} />
+    </button>
+  );
+}
+
+/**
+ * El estado del GPS, arriba del botón de cobrar.
+ *
+ * Es lo único que separa al cobrador de registrar el cobro, así que dice qué
+ * pasa y qué hacer, y trae el botón de reintentar al lado: en la calle el
+ * primer intento falla seguido y volver a abrir el diálogo para que se
+ * dispare de nuevo no es una instrucción que nadie vaya a deducir.
+ */
+function EstadoUbicacion({
+  estado,
+  buscando,
+  onReintentar,
+}: {
+  estado: ResultadoUbicacion | null;
+  buscando: boolean;
+  onReintentar: () => void;
+}) {
+  if (buscando || estado === null) {
+    return (
+      <div className="flex items-center gap-2 rounded-lg bg-muted px-3 py-2.5 text-sm">
+        <Loader2 className="size-4 shrink-0 animate-spin" />
+        Tomando la ubicación…
+      </div>
+    );
+  }
+
+  if (estado.ok) {
+    return (
+      <div className="flex items-center gap-2 rounded-lg bg-accent px-3 py-2.5 text-sm text-accent-foreground">
+        <MapPin className="size-4 shrink-0" />
+        Ubicación tomada
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2 rounded-lg bg-destructive/10 px-3 py-2.5">
+      <div className="flex items-start gap-2 text-sm font-semibold text-destructive">
+        <MapPin className="mt-0.5 size-4 shrink-0" />
+        <span>{estado.mensaje}</span>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Sin ubicación no se puede registrar el cobro. Si el cliente no paga, usá
+        &laquo;No pude cobrar&raquo;.
+      </p>
+      <Button variant="outline" size="sm" className="w-full" onClick={onReintentar}>
+        <RotateCw />
+        Reintentar ubicación
+      </Button>
+    </div>
+  );
+}
+
+/**
+ * Una de las dos opciones del sobrante.
+ *
+ * Botón grande con el título y la consecuencia, no un radio chiquito: la
+ * diferencia entre las dos no está en el nombre —las dos "descuentan cuotas"—
+ * sino en qué le pasa al cliente después, y eso hay que poder leerlo.
+ */
+function OpcionSobrante({
+  activa,
+  onClick,
+  titulo,
+  detalle,
+  disabled,
+}: {
+  activa: boolean;
+  onClick: () => void;
+  titulo: string;
+  detalle: string;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-pressed={activa}
+      className={cn(
+        "flex w-full flex-col gap-0.5 rounded-lg border-2 px-3 py-2.5 text-left transition-colors disabled:opacity-50",
+        activa
+          ? "border-primary bg-accent text-accent-foreground"
+          : "border-input hover:bg-muted",
+      )}
+    >
+      <span className="text-base font-semibold">{titulo}</span>
+      <span className="text-sm text-muted-foreground">{detalle}</span>
     </button>
   );
 }
