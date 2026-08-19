@@ -42,35 +42,37 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    // En escritorio la app se muestra como una franja del ancho de un teléfono,
-    // centrada y con el fondo apagado a los costados. No es una limitación: es
-    // la misma pantalla que el cobrador usa en la calle, y estirarla a 1920px
-    // dejaría una fila de datos perdida en medio del vacío.
-    // El exterior va MÁS CLARO que la franja en oscuro: `--background` ya es
-    // casi negro, así que un fondo más oscuro no se distinguía —medido en el
-    // navegador, los dos daban el mismo color y la franja solo la separaba un
-    // borde al 10%—. Con neutral-900 alrededor, la app se lee como un teléfono
-    // apoyado sobre el escritorio.
-    <div className="min-h-screen bg-muted/60 dark:bg-neutral-900">
-      <div className="mx-auto flex min-h-screen w-full max-w-md flex-col bg-background shadow-xl sm:border-x sm:border-border">
+    // Dos armazones según el ancho:
+    //
+    //   teléfono    una columna sola, con la navegación al pie
+    //   escritorio  franja de navegación a la izquierda y el contenido usando
+    //               el resto, con un tope de ancho para que una fila de datos
+    //               no quede perdida cruzando 1920 px
+    //
+    // Antes en escritorio se mostraba la misma columna angosta del teléfono,
+    // centrada sobre un fondo gris. Servía como maqueta, pero el cobrador y el
+    // supervisor lo abren en la computadora y ahí sobraba pantalla a los dos
+    // costados mientras la lista scrolleaba dentro de un canuto.
+    <div className="min-h-screen bg-background sm:pl-18">
+      <div className="mx-auto flex min-h-screen w-full max-w-md flex-col sm:max-w-3xl">
         <Navbar />
-        {/* pb-28: la barra de navegación es fija y taparía el final del listado */}
-        <main className="flex-1 px-3.5 pt-4 pb-28">{children}</main>
+        {/* El colchón de abajo despeja las dos cosas fijas: la barra de
+            navegación y el botón de opciones que flota encima. Desde `sm` la
+            navegación se va al costado y solo queda el botón. */}
+        <main className="flex-1 px-3.5 pt-4 pb-36 sm:px-5 sm:pb-24">{children}</main>
       </div>
       <NavTabs />
 
       {/* Hueco del botón de acciones (AccionesFab se dibuja acá por portal).
           Va en el layout y no en cada pantalla porque dónde entra depende del
-          armazón: la app vive en una franja centrada del ancho de un teléfono,
-          así que el botón se alinea al borde IZQUIERDO DE LA FRANJA y no al de
-          la pantalla — en escritorio, pegado al viewport, quedaría flotando
-          solo en el fondo gris. Va arriba de la barra de navegación, que mide
-          56 px más el margen de gestos del celular.
+          armazón: en el teléfono se alinea al borde de la columna y queda
+          arriba de la barra del pie; desde `sm` la barra se va al costado y el
+          botón se corre para no quedar encima de la franja.
           `pointer-events-none` para que el hueco no tape los clics del listado
           que hay detrás; el botón se los devuelve. */}
       <div
         id={RANURA_ACCIONES}
-        className="pointer-events-none fixed bottom-[calc(4.25rem_+_env(safe-area-inset-bottom))] left-1/2 z-45 w-full max-w-md -translate-x-1/2 pl-3.5"
+        className="pointer-events-none fixed bottom-[calc(4.25rem_+_env(safe-area-inset-bottom))] left-1/2 z-45 w-full max-w-md -translate-x-1/2 pl-3.5 sm:bottom-6 sm:left-18 sm:translate-x-0 sm:pl-4"
       />
     </div>
   );

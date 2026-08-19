@@ -2,12 +2,14 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { Copy, FileDown, Loader2, MessageCircle, Printer } from "lucide-react";
+import { Copy, FileDown, Loader2, MessageCircle, MessageSquareText, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { fmtMoney, formatFecha } from "@/lib/format";
 import { estadoDeCuentaToText } from "@/lib/estado-cuenta";
 import { enviarEstadoCuenta } from "@/lib/compartir";
+import { enlaceSms, medirSms, resumenParaSms } from "@/lib/sms";
+import { EMPRESA_NOMBRE } from "@/lib/marca";
 // Solo el tipo: el módulo arrastra @react-pdf/renderer (fontkit + hyphen) y se
 // carga con import() dinámico recién al generar el PDF.
 import type { EstadoCuentaPdfCliente } from "@/lib/pdf/estado-cuenta-pdf";
@@ -59,6 +61,12 @@ export function EstadoCuentaPanel({
   const [planId, setPlanId] = useState<number | undefined>(undefined);
 
   const texto = estadoDeCuentaToText(data);
+
+  // El SMS lleva su propio texto, no el de WhatsApp: aquel usa `*` para las
+  // negritas —que en un mensaje de texto se ven tal cual— y lista plan por
+  // plan, lo que multiplicaría el costo. Ver lib/sms.ts.
+  const textoSms = resumenParaSms(data, EMPRESA_NOMBRE);
+  const medida = medirSms(textoSms);
 
   const destinatarios: Destinatario[] = [
     ...telefonos.map((t) => ({ label: `${data.clienteNombre} · ${t.numero}`, numero: t.numero })),
@@ -206,6 +214,32 @@ export function EstadoCuentaPanel({
         </div>
       )}
 
+      {/* Qué se va a mandar y cuánto sale. Un mensaje de texto se cobra por
+          pieza, así que el cobrador tiene que poder ver si son una o tres
+          ANTES de tocar, no después. */}
+      <details className="rounded-lg border border-input bg-card px-3 py-2">
+        <summary className="cursor-pointer list-none text-sm font-semibold">
+          El mensaje de texto ·{" "}
+          <span
+            className={
+              medida.piezas > 1
+                ? "text-amber-600 dark:text-amber-400"
+                : "text-muted-foreground"
+            }
+          >
+            {medida.piezas === 1 ? "entra en 1 mensaje" : `son ${medida.piezas} mensajes`}
+          </span>
+        </summary>
+        <pre className="mt-2 font-sans text-sm whitespace-pre-wrap text-muted-foreground">
+          {textoSms}
+        </pre>
+        <p className="mt-1.5 text-xs text-muted-foreground">
+          {medida.caracteres} caracteres · quedan {medida.restantes}
+          {medida.alfabeto === "UCS-2" &&
+            " · tiene un carácter que achica el mensaje a 70 por pieza"}
+        </p>
+      </details>
+
       <div className="flex flex-wrap items-center gap-2">
         <Button variant="secondary" size="sm" onClick={imprimir} disabled={enviando}>
           <Printer />
@@ -219,6 +253,16 @@ export function EstadoCuentaPanel({
           <FileDown />
           PDF
         </Button>
+        {/* Abre la app de mensajes del teléfono con el resumen ya escrito.
+            Es un enlace y no un botón con onClick porque `sms:` lo tiene que
+            resolver el sistema operativo, no el navegador. */}
+        <Button variant="secondary" size="sm" asChild disabled={enviando}>
+          <a href={enlaceSms(numero, textoSms)}>
+            <MessageSquareText />
+            SMS
+          </a>
+        </Button>
+
         <Button size="sm" className="ml-auto" onClick={enviar} disabled={enviando}>
           {enviando ? <Loader2 className="animate-spin" /> : <MessageCircle />}
           {enviando

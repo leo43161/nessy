@@ -36,14 +36,17 @@ export function WhatsappButton({ telefonos, mensaje, children }: WhatsappButtonP
 
   if (telefonos.length <= 1) {
     return (
-      <button
-        type="button"
+      // Un <span> y no un <button>: el trigger YA es un botón, y anidar dos
+      // es HTML inválido — React tira un error de hidratación y el navegador
+      // arma un DOM distinto al del servidor. El span no rompe el layout
+      // (`contents`) y el click igual llega desde el botón de adentro, que es
+      // el que recibe foco y responde al Enter.
+      <span
         className="contents"
-        disabled={telefonos.length === 0}
         onClick={() => telefonos[0] && abrir(telefonos[0].numero)}
       >
         {trigger}
-      </button>
+      </span>
     );
   }
 
