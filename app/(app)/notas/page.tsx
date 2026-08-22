@@ -104,7 +104,7 @@ export default function NotasPage() {
           },
           {
             label: "Actualizar la lista",
-            descripcion: "Vuelve a traer las notas del servidor",
+            descripcion: "Por si cargaste alguna desde otro lado",
             icon: <RefreshCw />,
             onSelect: () => cobrador && dispatch(fetchNotas(cobrador.id)),
             disabled: !cobrador,

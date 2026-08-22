@@ -1,9 +1,10 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Archivo, Space_Mono } from "next/font/google";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { StoreProvider } from "@/components/providers/store-provider";
 import { Toaster } from "@/components/ui/sonner";
-import { EMPRESA_NOMBRE } from "@/lib/marca";
+import { RegistrarSW } from "@/components/providers/registrar-sw";
+import { EMPRESA_NOMBRE, MARCA_COLORES } from "@/lib/marca";
 import "./globals.css";
 
 // Archivo es la tipografía de marca de Preferenciale (brand sheet, sección 05):
@@ -27,6 +28,23 @@ const spaceMono = Space_Mono({
 export const metadata: Metadata = {
   title: `${EMPRESA_NOMBRE} — Cobros`,
   description: "Control de clientes y cobros de financiación",
+  // iOS no lee el manifiesto: para "Agregar a pantalla de inicio" necesita
+  // estas dos cosas o abre la app dentro de Safari, con la barra y todo.
+  appleWebApp: {
+    capable: true,
+    title: EMPRESA_NOMBRE,
+    statusBarStyle: "black-translucent",
+  },
+};
+
+export const viewport: Viewport = {
+  // Pinta la barra del navegador con el color de marca en vez del gris del
+  // sistema. Con la app instalada es el borde de arriba de la pantalla.
+  themeColor: MARCA_COLORES.primario,
+  // La app se usa en el celular todo el día: dejar hacer zoom es lo que
+  // permite leer una fila apretada. Bloquearlo sería cómodo para el layout y
+  // un problema para quien no ve bien.
+  maximumScale: 5,
 };
 
 export default function RootLayout({
@@ -45,6 +63,7 @@ export default function RootLayout({
           <StoreProvider>
             {children}
             <Toaster position="top-center" richColors />
+            <RegistrarSW />
           </StoreProvider>
         </ThemeProvider>
       </body>
